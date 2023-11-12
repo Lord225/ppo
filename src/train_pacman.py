@@ -16,9 +16,9 @@ parser.add_argument("--resume", type=str, default=None, help="resume from a mode
 args = parser.parse_args()
 
 
-import envs
+import enviroments
 
-env = envs.get_packman()
+env = enviroments.get_packman()
 
 params = argparse.Namespace()
 
@@ -93,8 +93,8 @@ def run():
 
     memory = ReplayMemory(10_000, params.observation_space)
 
-    env_step = envs.make_tensorflow_env_step(env, lambda x: envs.pacman_transform_observation(x, target_size=params.observation_space[:2]))
-    env_reset = envs.make_tensorflow_env_reset(env, lambda x: envs.pacman_transform_observation(x, target_size=params.observation_space[:2]))
+    env_step = enviroments.make_tensorflow_env_step(env, lambda x: enviroments.pacman_transform_observation(x, target_size=params.observation_space[:2]))
+    env_reset = enviroments.make_tensorflow_env_reset(env, lambda x: enviroments.pacman_transform_observation(x, target_size=params.observation_space[:2]))
 
     runner = get_episode_runner(env_step)
     runner = tf.function(runner)

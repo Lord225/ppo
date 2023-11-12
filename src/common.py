@@ -10,6 +10,13 @@ class ReplayHistoryType(NamedTuple):
     next_states: tf.Tensor
     dones: tf.Tensor
 
+class PPOReplayHistoryType(NamedTuple):
+    states: tf.Tensor
+    actions: tf.Tensor
+    advantages: tf.Tensor
+    returns: tf.Tensor
+    logprobability: tf.Tensor
+
 
 class EnvStepReturnType(NamedTuple):
     state: tf.Tensor

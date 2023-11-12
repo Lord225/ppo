@@ -33,14 +33,16 @@ def get_episode_runner(tf_env_step: Callable[[tf.Tensor], Tuple[tf.Tensor, tf.Te
 
             action_probs_t = tf.nn.softmax(action_logits_t)
 
-            action = tf.cast( 
-            tf.squeeze(tf.where(
-                tf.random.uniform([1]) < tf.cast(epsilon, tf.float32),
-                # Random int, 0-4096
-                tf.random.uniform([1], minval=0, maxval=env_actions, dtype=tf.int64),
-                # argmax action
-                tf.argmax(action_probs_t, axis=1)[0],
-            )), dtype=tf.int32)
+            # action = tf.cast( 
+            # tf.squeeze(tf.where(
+            #     tf.random.uniform([1]) < tf.cast(epsilon, tf.float32),
+            #     # Random int, 0-4096
+            #     tf.random.uniform([1], minval=0, maxval=env_actions, dtype=tf.int64),
+            #     # argmax action
+            #     tf.argmax(action_probs_t, axis=1)[0],
+            # )), dtype=tf.int32)
+
+            action = tf.squeeze(tf.random.categorical(action_probs_t, 1), axis=1)
             
             actions = actions.write(t, action)
 

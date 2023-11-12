@@ -16,21 +16,21 @@ parser.add_argument("--resume", type=str, default=None, help="resume from a mode
 args = parser.parse_args()
 
 
-import envs
+import enviroments
 
-env = envs.get_packman_stack_frames()
+env = enviroments.get_packman_stack_frames()
 
 params = argparse.Namespace()
 
 params.env_name = env.spec.id
-params.version = "v1.4"
+params.version = "v1.5"
 params.DRY_RUN = False
 
 
 params.lr = 0.0002
 params.action_space = env.action_space.n # type: ignore
 params.observation_space_raw = env.observation_space.shape
-params.observation_space = (50, 50, 3*2)
+params.observation_space = (85, 50, 3*2)
 
 params.episodes = 100000
 params.max_steps_per_episode = 1000
@@ -42,7 +42,7 @@ params.eps_min = 0.1
 params.batch_size = 2048
 params.iters_per_episode = 20
 params.mini_batch_size = 128
-params.train_interval = 2
+params.train_interval = 1
 params.target_update_freq = 150
 params.save_freq = 250
 if args.resume is not None:
@@ -84,7 +84,6 @@ from memory import ReplayMemory
 
 optimizer = tf.keras.optimizers.Adam(params.lr)
 
-
 from exp_collectors.play import get_episode_runner 
 import time
 
@@ -93,8 +92,8 @@ def run():
 
     memory = ReplayMemory(10_000, params.observation_space)
 
-    env_step = envs.make_tensorflow_env_step(env, lambda x: envs.pacman_transform_observation_stack(x, target_size=params.observation_space[:2]))
-    env_reset = envs.make_tensorflow_env_reset(env, lambda x: envs.pacman_transform_observation_stack(x, target_size=params.observation_space[:2]))
+    env_step = enviroments.make_tensorflow_env_step(env, lambda x: enviroments.pacman_transform_observation_stack(x, target_size=params.observation_space[:2]))
+    env_reset = enviroments.make_tensorflow_env_reset(env, lambda x: enviroments.pacman_transform_observation_stack(x, target_size=params.observation_space[:2]))
 
     runner = get_episode_runner(env_step)
     runner = tf.function(runner)
