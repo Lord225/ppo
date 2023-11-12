@@ -8,10 +8,10 @@ def get_episode_runner(tf_env_step: Callable[[tf.Tensor], Tuple[tf.Tensor, tf.Te
     @tf.function(reduce_retracing=True)
     def run_episode(
             initial_state: tf.Tensor,
-            actor_model: tf.keras.Model, 
-            max_steps: int,
-            epsilon: float,
-            env_actions: int,
+            actor_model: tf.keras.Model,
+            max_steps: tf.Tensor,
+            epsilon: tf.Tensor,
+            env_actions: tf.Tensor,
             ) -> Tuple[ReplayHistoryType, tf.Tensor]:
         states = tf.TensorArray(dtype=tf.float32, size=0, dynamic_size=True)
         actions = tf.TensorArray(dtype=tf.int32, size=0, dynamic_size=True)

@@ -13,7 +13,7 @@ args = parser.parse_args()
 import tensorflow as tf
 import envs
 
-env = envs.get_packman(human=True)
+env = envs.get_packman_stack_frames(human=True)
 
 model = tf.keras.models.load_model(args.model)
 
@@ -22,7 +22,7 @@ if args.model is None:
 
 state, _ = env.reset()
 
-state = envs.pacman_transform_observation(state, (84, 84))
+state = envs.pacman_transform_observation_stack(state, (50, 50))
 
 
 while True:
@@ -32,10 +32,10 @@ while True:
     action_probs_t = tf.nn.softmax(action_logits_t)
     action = tf.argmax(action_probs_t, axis=1)[0]
     state, _, done, _, _ = env.step(int(action)) # type: ignore
-    state = envs.pacman_transform_observation(state, (84, 84))
+    state = envs.pacman_transform_observation_stack(state, (50, 50))
     if done:
         state, _ = env.reset()
-        state = envs.pacman_transform_observation(state, (84, 84))
+        state = envs.pacman_transform_observation_stack(state, (50, 50))
 
     env.render()
 
