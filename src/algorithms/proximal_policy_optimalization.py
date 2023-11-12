@@ -22,7 +22,7 @@ def training_step_ppo(batch,
     
     observation_buffer, action_buffer, logprobability_buffer, advantage_buffer = batch
     with tf.GradientTape() as tape:
-        logits = actor_model(observation_buffer)
+        logits, _ = actor_model(observation_buffer)
 
         ratio = tf.exp(logprobabilities(logits, action_buffer, num_of_actions) - logprobability_buffer)
 
@@ -53,7 +53,7 @@ def training_step_critic(
 ):
     observation_buffer, target_buffer = batch
     with tf.GradientTape() as tape:
-        values = critic_model(observation_buffer)
+        _, values = critic_model(observation_buffer)
         loss = tf.reduce_mean(tf.square(target_buffer - values))
 
     gradients = tape.gradient(loss, critic_model.trainable_variables)

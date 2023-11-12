@@ -1,7 +1,7 @@
 import scipy
 from sympy import Q
 import tensorflow as tf
-from common import PPOReplayHistoryType, ReplayHistoryType
+from common import HistorySampleType, PPOReplayHistoryType, ReplayHistoryType
 
 
 class ReplayMemory:
@@ -99,7 +99,7 @@ class PPOReplayMemory:
             max_size,
             gamma,
             lam,
-            ):
+            ):# -> tuple[Any, Any, Any, Any, Any, Any, Any, Any, Any]:
         states, actions, rewards, values, logprobs, dones = batch
         batch_size = len(states)
         indices = tf.range(count, count + batch_size) % max_size
@@ -114,7 +114,7 @@ class PPOReplayMemory:
         returns = tf.TensorArray(dtype=tf.float32, size=0, dynamic_size=True)
 
         for i in tf.range(batch_size, dtype=tf.int32):
-            if dones[i]:
+            if tf.cast(dones[i], tf.bool): # type: ignore
                 advantages = advantages.write(i, 0.0)
                 returns = returns.write(i, rewards[i])
             else:
@@ -155,24 +155,24 @@ class PPOReplayMemory:
         self.logprobability_buffer = logprobability_buffer
         self.advantages_buffer = advantages_buffer
         self.returns_buffer = returns_buffer
-        self.count = count
-    
-    @tf.function
-    def sample(self, batch_size) -> PPOReplayHistoryType:
+        self.count = int(count)
+
+      
+    def sample(self, batch_size) -> HistorySampleType:
         assert self.count >= batch_size, "buffer contains less samples than batch size"
 
-        indices = tf.range(self.count - batch_size, self.count) % self.max_size
+        indices = tf.random.uniform((batch_size,), 0, self.count, dtype=tf.int32)
 
-        advantages = self.advantages_buffer[indices] # type: ignore
-        advantages = (advantages - tf.math.reduce_mean(advantages)) / (tf.math.reduce_std(advantages) + 1e-7)
-
-        return PPOReplayHistoryType(
+        return HistorySampleType(
             tf.gather(self.states_buffer, indices),
             tf.gather(self.actions_buffer, indices),
-            advantages,
-            tf.gather(self.returns_buffer, indices),
-            tf.gather(self.logprobability_buffer, indices)
+            tf.gather(self.logprobability_buffer, indices),
+            tf.gather(self.advantages_buffer, indices),
         )
+
+    def __len__(self):
+        return self.count
+         
         
 
 import unittest
