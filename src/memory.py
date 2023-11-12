@@ -17,7 +17,6 @@ class ReplayMemory:
         self.real_size = 0
 
     def add(self, states, actions, returns, next_states, dones):
-       
         batch_size = len(states)
         indices = tf.range(self.count, self.count + batch_size) % self.max_size
         self.states_buffer = tf.tensor_scatter_nd_update(self.states_buffer, indices[:, None], states)
@@ -64,14 +63,37 @@ class PPOReplayMemory:
         self.gamma = gamma
         self.lam = lam
 
-    # tf.numpy_function
-    def lfilter(self, x, a, b):
-        return scipy.signal.lfilter(b, a, x)
-    
-    @tf.function
-    def tf_lfilter(self, x, a, b):
-        return tf.numpy_function(self.lfilter, [x, a, b], tf.float32)
-
     @tf.function
     def discounted_cumulative_sums_tf(self, x, discount):
-       return self.tf_lfilter(x, [1], [1, float(-discount)], axis=0)
+        x = tf.cast(x[::-1], dtype=tf.float32) 
+        n = tf.shape(x)[0]
+        cumulative = tf.TensorArray(dtype=tf.float32, size=n) 
+        discounted_sum = tf.constant(0.0)
+        discounted_sum_shape = discounted_sum.shape
+        for i in tf.range(n):
+            reward = x[i] # type: ignore
+            discounted_sum = reward + discount * discounted_sum
+            discounted_sum.set_shape(discounted_sum_shape)
+            returns = cumulative.write(i, discounted_sum)
+
+        returns = returns.stack()[::-1] # type: ignore
+
+        # Normalize returns
+        returns = (returns - tf.math.reduce_mean(returns)) / (tf.math.reduce_std(returns) + 1e-7)
+
+        return returns
+    
+    def add(self, states, actions, rewards, values, logprobs, dones):
+        batch_size = len(states)
+        indices = tf.range(self.count, self.count + batch_size) % self.max_size
+        self.states_buffer = tf.tensor_scatter_nd_update(self.states_buffer, indices[:, None], states)
+        self.actions_buffer = tf.tensor_scatter_nd_update(self.actions_buffer, indices[:, None], actions)
+        self.rewards_buffer = tf.tensor_scatter_nd_update(self.rewards_buffer, indices[:, None], rewards)
+        self.value_buffer = tf.tensor_scatter_nd_update(self.value_buffer, indices[:, None], values)
+        self.logprobability_buffer = tf.tensor_scatter_nd_update(self.logprobability_buffer, indices[:, None], logprobs)
+        self.dones_buffer = tf.tensor_scatter_nd_update(self.dones_buffer, indices[:, None], dones)
+        self.count = (self.count + batch_size) % self.max_size
+
+    def trajectory_end(self, last_state, last_value):
+        # Finish the trajectory by computing advantage estimates and rewards-to-go
+        last_state = tf.expand_dims(last_state, 0)

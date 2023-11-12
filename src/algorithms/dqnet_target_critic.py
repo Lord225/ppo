@@ -33,7 +33,7 @@ def training_step_dqnet_target_critic(
 
     for _ in tf.range(iters_per_episode):
         # sample data
-        idx = tf.random.uniform([mini_batch_size], minval=0, maxval=len(batch.states), dtype=tf.int32)
+        idx = tf.random.uniform([mini_batch_size], minval=0, maxval=len(batch.states), dtype=tf.int64)
         
         states = tf.gather(batch_states, idx)
         actions = tf.gather(batch_actions, idx)

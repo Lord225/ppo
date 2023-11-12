@@ -4,14 +4,31 @@ import numpy as np
 import tensorflow as tf
 import cv2 
 
+from gym.wrappers import frame_stack
+
 def get_packman(human: bool = False):
     return gym.make("ALE/MsPacman-v5", obs_type="image", frameskip=4, render_mode="human" if human else "rgb_array")
 
+def get_packman_stack_frames(human: bool = False):
+    env = get_packman(human)
+    env = frame_stack.FrameStack(env, 2)
+    return env
+
 def pacman_transform_observation(observation, target_size):
-    # use numpy to resize image to target size
     observation = cv2.resize(observation, target_size)
     return observation.astype(np.float32)/255
-    
+
+def pacman_transform_observation_stack(observation, target_size):
+    observation = observation.__array__()
+    # reshpae from (2, 210, 160, 3) to (210, 160, 2, 3)
+    observation = np.transpose(observation, (1, 2, 0, 3))
+    # reshape from (210, 160, 2, 3) to (210, 160, 6)
+    observation = np.reshape(observation, (observation.shape[0], observation.shape[1], -1))
+    # resize to target size
+    observation = cv2.resize(observation, target_size)
+    return observation.astype(np.float32)/255
+
+
     
 ObservationTransformer = Callable[[Any], np.ndarray]
 
@@ -21,7 +38,9 @@ def make_tensorflow_env_step(env: gym.Env, observation_transformer: ObservationT
         state = observation_transformer(state)
         return (state.astype(np.float32), np.array(reward, np.float32), np.array(done, np.int32))
 
-    @tf.function
+    @tf.function(
+        input_signature=[tf.TensorSpec(shape=(), dtype=tf.int32)]
+    )
     def tf_env_step(action):
         return tf.numpy_function(step, [action], (tf.float32, tf.float32, tf.int32))
     return tf_env_step # type: ignore
