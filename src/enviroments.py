@@ -28,10 +28,8 @@ def pacman_transform_observation_stack(observation, target_size):
     observation = cv2.resize(observation, target_size)
     return observation.astype(np.float32)/255
 
-def pacman_transform_observation_stack_grayscale(observation, target_size):
+def pacman_transform_observation_stack_big(observation, target_size):
     observation = observation.__array__()
-    # grayscale
-    observation = np.mean(observation, axis=3)
     # reshpae from (2, 210, 160, 3) to (210, 160, 2, 3)
     observation = np.transpose(observation, (1, 2, 0, 3))
     # reshape from (210, 160, 2, 3) to (210, 160, 6)

@@ -3,7 +3,7 @@ import tensorflow as tf
 import tensorboard
 import os
 import argparse
-
+import enviroments
 import tqdm
 from algorithms.dqnet_target_critic import training_step_dqnet_target_critic
 from common import splash_screen
@@ -15,8 +15,6 @@ parser.add_argument("--resume", type=str, default=None, help="resume from a mode
 
 args = parser.parse_args()
 
-
-import enviroments
 
 env = enviroments.get_packman_stack_frames()
 

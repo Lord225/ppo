@@ -1,4 +1,5 @@
 from argparse import Namespace
+import stat
 import tensorflow as tf
 from typing import Callable, List, Tuple, Union,NamedTuple
 from tensorboard.plugins.hparams import api as hp
@@ -16,6 +17,13 @@ class PPOReplayHistoryType(NamedTuple):
     advantages: tf.Tensor
     returns: tf.Tensor
     logprobability: tf.Tensor
+    dones: tf.Tensor
+
+class HistorySampleType(NamedTuple):
+    states: tf.Tensor
+    actions: tf.Tensor
+    logprobability: tf.Tensor
+    advantages: tf.Tensor
 
 
 class EnvStepReturnType(NamedTuple):
