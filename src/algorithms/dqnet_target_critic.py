@@ -46,7 +46,7 @@ def training_step_dqnet_target_critic(
         next_mask = tf.one_hot(best_next_actions, n_outputs)
         next_best_Q, _ = target_model(next_states, training=True) # type: ignore 
         next_best_Q_values = tf.reduce_sum(next_best_Q * next_mask, axis=1)
-        target_Q_values = (rewards + (tf.constant(1.0, dtype=tf.float32) - dones) * discount_rate * next_best_Q_values)
+        target_Q_values = (rewards + (tf.constant(1.0, dtype=tf.float32) - tf.cast(dones, dtype=tf.float32)) * discount_rate * next_best_Q_values)
         target_Q_values = tf.reshape(target_Q_values, [-1, 1])
         mask = tf.one_hot(actions, n_outputs)
 
