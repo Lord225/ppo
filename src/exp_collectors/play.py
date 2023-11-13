@@ -18,7 +18,7 @@ def get_episode_runner(tf_env_step: Callable[[tf.Tensor], Tuple[tf.Tensor, tf.Te
         actions = tf.TensorArray(dtype=tf.int32, size=0, dynamic_size=True)
         rewards = tf.TensorArray(dtype=tf.float32, size=0, dynamic_size=True)
         next_states = tf.TensorArray(dtype=tf.float32, size=0, dynamic_size=True)
-        dones = tf.TensorArray(dtype=tf.bool, size=0, dynamic_size=True)
+        dones = tf.TensorArray(dtype=tf.float32, size=0, dynamic_size=True)
 
         initial_state_shape = initial_state.shape
         state = initial_state
@@ -34,18 +34,16 @@ def get_episode_runner(tf_env_step: Callable[[tf.Tensor], Tuple[tf.Tensor, tf.Te
 
             action_probs_t = tf.nn.softmax(action_logits_t)
 
-            # action = tf.cast( 
-            # tf.squeeze(tf.where(
-            #     tf.random.uniform([1]) < tf.cast(epsilon, tf.float32),
-            #     # Random int, 0-4096
-            #     tf.random.uniform([1], minval=0, maxval=env_actions, dtype=tf.int64),
-            #     # argmax action
-            #     tf.argmax(action_probs_t, axis=1)[0],
-            # )), dtype=tf.int32)
+            action = tf.cast( 
+            tf.squeeze(tf.where(
+                tf.random.uniform([1]) < tf.cast(epsilon, tf.float32),
+                # Random int, 0-4096
+                tf.random.uniform([1], minval=0, maxval=env_actions, dtype=tf.int64),
+                # argmax action
+                tf.cast(tf.squeeze(tf.random.categorical(action_probs_t, 1), axis=1), tf.int64)[0],
+            )), dtype=tf.int32)
 
-            action = tf.squeeze(tf.random.categorical(action_probs_t, 1), axis=1)
-            action = tf.cast(action, tf.int32)
-            action = tf.squeeze(action)
+            
 
             actions = actions.write(t, action)
 
@@ -55,7 +53,7 @@ def get_episode_runner(tf_env_step: Callable[[tf.Tensor], Tuple[tf.Tensor, tf.Te
 
             next_states = next_states.write(t, state)
 
-            dones = dones.write(t, tf.cast(done, tf.bool))
+            dones = dones.write(t, tf.cast(done, tf.float32))
 
             # Store reward
             rewards = rewards.write(t, reward)

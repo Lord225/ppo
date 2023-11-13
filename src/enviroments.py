@@ -1,3 +1,4 @@
+from re import A
 from typing import Any, Callable, Tuple
 import gym
 import numpy as np
@@ -27,6 +28,7 @@ def pacman_transform_observation_stack(observation, target_size):
     # resize to target size
     observation = cv2.resize(observation, target_size)
     return observation.astype(np.float32)/255
+import matplotlib.pyplot as plt
 
 def pacman_transform_observation_stack_big(observation, target_size):
     observation = observation.__array__()
@@ -35,9 +37,9 @@ def pacman_transform_observation_stack_big(observation, target_size):
     # reshape from (210, 160, 2, 3) to (210, 160, 6)
     observation = np.reshape(observation, (observation.shape[0], observation.shape[1], -1))
     # resize to target size
-    observation = cv2.resize(observation, target_size, interpolation=cv2.INTER_NEAREST)
+    observation = cv2.resize(observation,  (50, 105), interpolation=cv2.INTER_NEAREST)
     # cut lower part of the image
-    observation = observation[:85, :, :] # shape (85, 50, 2)
+    observation = observation[:85, :, :] # shape (85, 50, 6)
     return observation.astype(np.float32)/255
 
 

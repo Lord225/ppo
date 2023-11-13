@@ -25,7 +25,7 @@ params.version = "v1.5"
 params.DRY_RUN = False
 
 
-params.lr = 0.0002
+params.lr = 0.00003
 params.action_space = env.action_space.n # type: ignore
 params.observation_space_raw = env.observation_space.shape
 params.observation_space = (85, 50, 3*2)
@@ -33,16 +33,16 @@ params.observation_space = (85, 50, 3*2)
 params.episodes = 100000
 params.max_steps_per_episode = 1000
 
-params.discount_rate = 0.8
-params.eps_decay_len = 4000
+params.discount_rate = 0.99
+params.eps_decay_len = 1000
 params.eps_min = 0.1
 
-params.batch_size = 2048
-params.iters_per_episode = 20
-params.mini_batch_size = 128
+params.batch_size = 4096
+params.iters_per_episode = 80
+params.mini_batch_size = 64
 params.train_interval = 1
-params.target_update_freq = 150
-params.save_freq = 250
+params.target_update_freq = 100
+params.save_freq = 500
 if args.resume is not None:
     params.resumed = 'resumed from: ' + os.path.basename(args.resume)
 
@@ -90,8 +90,8 @@ def run():
 
     memory = ReplayMemory(10_000, params.observation_space)
 
-    env_step = enviroments.make_tensorflow_env_step(env, lambda x: enviroments.pacman_transform_observation_stack(x, target_size=params.observation_space[:2]))
-    env_reset = enviroments.make_tensorflow_env_reset(env, lambda x: enviroments.pacman_transform_observation_stack(x, target_size=params.observation_space[:2]))
+    env_step = enviroments.make_tensorflow_env_step(env, lambda x: enviroments.pacman_transform_observation_stack_big(x, target_size=params.observation_space))
+    env_reset = enviroments.make_tensorflow_env_reset(env, lambda x: enviroments.pacman_transform_observation_stack_big(x, target_size=params.observation_space))
 
     runner = get_episode_runner(env_step)
     runner = tf.function(runner)
