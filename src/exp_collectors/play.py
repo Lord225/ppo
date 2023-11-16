@@ -78,6 +78,7 @@ def get_ppo_runner(tf_env_step: Callable[[tf.Tensor], Tuple[tf.Tensor, tf.Tensor
             actor_model: tf.keras.Model, 
             max_steps: int,
             env_actions: int,
+            epsilon: float,
             ):
         
         states = tf.TensorArray(dtype=tf.float32, size=0, dynamic_size=True)

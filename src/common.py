@@ -25,6 +25,9 @@ class HistorySampleType(NamedTuple):
     logprobability: tf.Tensor
     advantages: tf.Tensor
 
+class HistorySampleCriticType(NamedTuple):
+    states: tf.Tensor
+    returns: tf.Tensor
 
 class EnvStepReturnType(NamedTuple):
     state: tf.Tensor
