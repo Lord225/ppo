@@ -17,8 +17,7 @@ class PPOReplayHistoryType(NamedTuple):
     advantages: tf.Tensor
     returns: tf.Tensor
     logprobability: tf.Tensor
-    dones: tf.Tensor
-
+    
 class HistorySampleType(NamedTuple):
     states: tf.Tensor
     actions: tf.Tensor
