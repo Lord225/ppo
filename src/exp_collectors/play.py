@@ -44,6 +44,9 @@ def get_episode_runner(tf_env_step: Callable[[tf.Tensor], Tuple[tf.Tensor, tf.Te
             )), dtype=tf.int32)
 
             
+            
+
+        
 
             actions = actions.write(t, action)
 
@@ -75,18 +78,15 @@ def get_ppo_runner(tf_env_step: Callable[[tf.Tensor], Tuple[tf.Tensor, tf.Tensor
     @tf.function(reduce_retracing=True)
     def run_episode(
             initial_state: tf.Tensor,
-            actor_model: tf.keras.Model, 
+            actor_model: tf.keras.Model,
             max_steps: int,
             env_actions: int,
-            epsilon: float,
             ):
-        
         states = tf.TensorArray(dtype=tf.float32, size=0, dynamic_size=True)
         actions = tf.TensorArray(dtype=tf.int32, size=0, dynamic_size=True)
         rewards = tf.TensorArray(dtype=tf.float32, size=0, dynamic_size=True)
         values = tf.TensorArray(dtype=tf.float32, size=0, dynamic_size=True)
         log_probs = tf.TensorArray(dtype=tf.float32, size=0, dynamic_size=True)
-        dones = tf.TensorArray(dtype=tf.float32, size=0, dynamic_size=True)
 
         initial_state_shape = initial_state.shape
         state = initial_state
@@ -117,7 +117,6 @@ def get_ppo_runner(tf_env_step: Callable[[tf.Tensor], Tuple[tf.Tensor, tf.Tensor
             rewards = rewards.write(t, reward)
             values = values.write(t, tf.squeeze(value_t))
             log_probs = log_probs.write(t, tf.squeeze(log_prob))
-            dones = dones.write(t, tf.cast(done, tf.float32))
 
             if tf.cast(done, tf.bool): # type: ignore
                 break
@@ -127,8 +126,7 @@ def get_ppo_runner(tf_env_step: Callable[[tf.Tensor], Tuple[tf.Tensor, tf.Tensor
         rewards = rewards.stack()
         values = values.stack()
         log_probs = log_probs.stack()
-        dones = dones.stack()
 
-        return PPOReplayHistoryType(states, actions, rewards, values, log_probs, dones), tf.reduce_sum(rewards)
+        return PPOReplayHistoryType(states, actions, rewards, values, log_probs), tf.reduce_sum(rewards)
                 
     return run_episode

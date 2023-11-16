@@ -21,28 +21,30 @@ def training_step_ppo(batch,
                       ):
     
     observation_buffer, action_buffer, logprobability_buffer, advantage_buffer = batch
-    with tf.GradientTape() as tape:
+    with tf.GradientTape() as tape:  # Record operations for automatic differentiation.
         logits, _ = actor_model(observation_buffer)
-
-        ratio = tf.exp(logprobabilities(logits, action_buffer, num_of_actions) - logprobability_buffer)
-
+        
+        ratio = tf.exp(
+            logprobabilities(logits, action_buffer, num_of_actions)
+            - logprobability_buffer
+        )
         min_advantage = tf.where(
             advantage_buffer > 0,
             (1 + clip_ratio) * advantage_buffer,
             (1 - clip_ratio) * advantage_buffer,
         )
 
-        loss = -tf.reduce_mean(tf.minimum(ratio * advantage_buffer, min_advantage))
-
-    gradients = tape.gradient(loss, actor_model.trainable_variables)
-
-    optimizer.apply_gradients(zip(gradients, actor_model.trainable_variables))
+        policy_loss = -tf.reduce_mean(
+            tf.minimum(ratio * advantage_buffer, min_advantage)
+        )
+    policy_grads = tape.gradient(policy_loss, actor_model.trainable_variables)
+    optimizer.apply_gradients(zip(policy_grads, actor_model.trainable_variables))
 
     kl = tf.reduce_mean(logprobability_buffer - logprobabilities(logits, action_buffer, num_of_actions))
     kl = tf.reduce_mean(kl)
 
     tf.summary.scalar('kl', kl, step=step) # type: ignore
-    tf.summary.scalar('loss', loss, step=step)
+    tf.summary.scalar('loss', policy_loss, step=step)
     tf.summary.scalar('mean_ratio', tf.reduce_mean(ratio), step=step)
     tf.summary.scalar('mean_clipped_ratio', tf.reduce_mean(min_advantage), step=step)
     tf.summary.scalar('mean_advantage', tf.reduce_mean(advantage_buffer), step=step)

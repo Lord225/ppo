@@ -52,7 +52,7 @@ def make_tensorflow_env_step(env: gym.Env, observation_transformer: ObservationT
     def step(action):
         state, reward, done, _, _ = env.step(int(action))
         state = observation_transformer(state)
-        return (state.astype(np.float32), np.array(reward, np.float32), np.array(done, np.int32))
+        return (np.array(state, np.float32), np.array(reward, np.float32), np.array(done, np.int32))
 
     @tf.function(
         input_signature=[tf.TensorSpec(shape=(), dtype=tf.int32)] # type: ignore

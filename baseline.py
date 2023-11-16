@@ -13,9 +13,11 @@ import sys
 np.set_printoptions(threshold=sys.maxsize)
 def discounted_cumulative_sums(x, discount):
     # Discounted cumulative sums of vectors for computing rewards-to-go and advantage estimates
-    for i in range(len(x) - 2, -1, -1):
-        x[i] += discount * x[i + 1]
-    return x
+    new_x = x[::-1].copy()
+    for i in range(1, len(new_x)):
+        new_x[i] += discount * new_x[i - 1]
+    
+    return new_x[::-1]
 
 
 class Buffer:
@@ -58,15 +60,22 @@ class Buffer:
             rewards, self.gamma
         )[:-1]
 
-        # print('values', values)
-        # print('rewards', rewards)
-        # print('deltas', deltas)
-        # print('advantages', advantages)
-        # print('returns', returns)
+
 
         self.advantage_buffer[path_slice] = advantages
         self.return_buffer[path_slice] = returns
         self.trajectory_start_index = self.pointer
+
+        # print('states', self.observation_buffer)
+        # print('actions', self.action_buffer)
+        # print('rewards', self.reward_buffer)
+        # print('values', self.value_buffer)
+        # print('logprobabilities', self.logprobability_buffer)
+        # print('advantages', self.advantage_buffer)
+        # print('returns', self.return_buffer)
+        # print('deltas', deltas)
+        # print('last_value', last_value)
+    
 
     def get(self):
         # Get all data of the buffer and normalize the advantages
@@ -153,7 +162,7 @@ def train_value_function(observation_buffer, return_buffer):
 """
 
 # Hyperparameters of the PPO algorithm
-steps_per_epoch = 4000
+steps_per_epoch = 100
 epochs = 30
 gamma = 0.99
 clip_ratio = 0.2
@@ -201,6 +210,9 @@ episode_length = 0
 """
 ## Train
 """
+
+total_plays = 0
+total_env_iterations = 0
 # Iterate over the number of epochs
 for epoch in range(epochs):
     # Initialize the sum of the returns, lengths and number of episodes for each epoch
@@ -241,6 +253,8 @@ for epoch in range(epochs):
             observation, _ = env.reset()
             episode_return = 0
             episode_length = 0
+            total_plays += 1
+            total_env_iterations += t
 
             
 
@@ -270,3 +284,5 @@ for epoch in range(epochs):
     print(
         f" Epoch: {epoch + 1}. Mean Return: {sum_return / num_episodes}. Mean Length: {sum_length / num_episodes}"
     )
+    print('total_plays', total_plays)
+    print('total_env_iterations', total_env_iterations)
