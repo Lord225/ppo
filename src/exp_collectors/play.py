@@ -78,7 +78,8 @@ def get_ppo_runner(tf_env_step: Callable[[tf.Tensor], Tuple[tf.Tensor, tf.Tensor
     @tf.function(reduce_retracing=True)
     def run_episode(
             initial_state: tf.Tensor,
-            actor_model: tf.keras.Model,
+            actor: tf.keras.Model,
+            critic: tf.keras.Model,
             max_steps: int,
             env_actions: int,
             ):
@@ -97,11 +98,11 @@ def get_ppo_runner(tf_env_step: Callable[[tf.Tensor], Tuple[tf.Tensor, tf.Tensor
             state = tf.expand_dims(state, 0)
 
             # Run the model and to get action probabilities and critic value
-            action_logits_t, value_t = actor_model(state) # type: ignore
+            action_logits_t = actor(state) # type: ignore
 
-            action_probs_t = tf.nn.softmax(action_logits_t)
+            value_t = critic(state) # type: ignore
 
-            action = tf.squeeze(tf.random.categorical(action_probs_t, 1), axis=1)
+            action = tf.squeeze(tf.random.categorical(action_logits_t, 1), axis=1)
             action = tf.cast(action, tf.int32)
             action = tf.squeeze(action)
 
@@ -110,6 +111,7 @@ def get_ppo_runner(tf_env_step: Callable[[tf.Tensor], Tuple[tf.Tensor, tf.Tensor
             state.set_shape(initial_state_shape)
             
             log_prob = logprobabilities(action_logits_t, action, env_actions)
+            
 
             # store results
             states = states.write(t, state)
@@ -130,3 +132,4 @@ def get_ppo_runner(tf_env_step: Callable[[tf.Tensor], Tuple[tf.Tensor, tf.Tensor
         return PPOReplayHistoryType(states, actions, rewards, values, log_probs), tf.reduce_sum(rewards)
                 
     return run_episode
+

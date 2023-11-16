@@ -13,7 +13,7 @@ def clip(values, clip_ratio):
 
 @tf.function
 def training_step_ppo(batch,
-                      actor_model,
+                      actor,
                       num_of_actions,
                       clip_ratio,
                       optimizer: tf.keras.optimizers.Optimizer,
@@ -22,7 +22,7 @@ def training_step_ppo(batch,
     
     observation_buffer, action_buffer, logprobability_buffer, advantage_buffer = batch
     with tf.GradientTape() as tape:  # Record operations for automatic differentiation.
-        logits, _ = actor_model(observation_buffer)
+        logits = actor(observation_buffer)
         
         ratio = tf.exp(
             logprobabilities(logits, action_buffer, num_of_actions)
@@ -37,8 +37,8 @@ def training_step_ppo(batch,
         policy_loss = -tf.reduce_mean(
             tf.minimum(ratio * advantage_buffer, min_advantage)
         )
-    policy_grads = tape.gradient(policy_loss, actor_model.trainable_variables)
-    optimizer.apply_gradients(zip(policy_grads, actor_model.trainable_variables))
+    policy_grads = tape.gradient(policy_loss, actor.trainable_variables)
+    optimizer.apply_gradients(zip(policy_grads, actor.trainable_variables))
 
     kl = tf.reduce_mean(logprobability_buffer - logprobabilities(logits, action_buffer, num_of_actions))
     kl = tf.reduce_mean(kl)
@@ -53,17 +53,16 @@ def training_step_ppo(batch,
 @tf.function
 def training_step_critic(
         batch,
-        critic_model,
+        critic,
         optimizer: tf.keras.optimizers.Optimizer,
         step: int
 ):
     observation_buffer, target_buffer = batch
     with tf.GradientTape() as tape:
-        _, values = critic_model(observation_buffer)
+        values = critic(observation_buffer)
         loss = tf.reduce_mean(tf.square(target_buffer - values))
 
-    gradients = tape.gradient(loss, critic_model.trainable_variables)
-
-    optimizer.apply_gradients(zip(gradients, critic_model.trainable_variables))
+    gradients = tape.gradient(loss, critic.trainable_variables)
+    optimizer.apply_gradients(zip(gradients, critic.trainable_variables))
 
     tf.summary.scalar('critic_loss', loss, step=step) # type: ignore

@@ -75,6 +75,11 @@ class PPOReplayMemory:
         self.max_size = max_size
         self.count = 0
         self.real_size = 0
+
+    def reset(self):
+        self.real_size = 0
+        self.count = 0
+
     
     @tf.function
     def add_tf(self, states, actions, rewards, values, logprobabilities,
