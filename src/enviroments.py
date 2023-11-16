@@ -41,9 +41,11 @@ def pacman_transform_observation_stack_big(observation, target_size):
     # cut lower part of the image
     observation = observation[:85, :, :] # shape (85, 50, 6)
     return observation.astype(np.float32)/255
-
-
     
+def get_pole(human: bool = False):
+    return gym.make("CartPole-v1", render_mode="human" if human else "rgb_array")
+
+
 ObservationTransformer = Callable[[Any], np.ndarray]
 
 def make_tensorflow_env_step(env: gym.Env, observation_transformer: ObservationTransformer)-> Callable[[tf.Tensor], Tuple[tf.Tensor, tf.Tensor, tf.Tensor]]:

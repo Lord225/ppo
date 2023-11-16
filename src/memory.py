@@ -1,7 +1,5 @@
-import scipy
-from sympy import Q
 import tensorflow as tf
-from common import HistorySampleType, PPOReplayHistoryType, ReplayHistoryType
+from common import HistorySampleCriticType, HistorySampleType, PPOReplayHistoryType, ReplayHistoryType
 
 
 class ReplayMemory:
@@ -66,24 +64,15 @@ class PPOReplayMemory:
 
     @tf.function
     def discounted_cumulative_sums_tf(self, x, discount):
-        x = tf.cast(x[::-1], dtype=tf.float32) 
-        n = tf.shape(x)[0]
-       
-        returns = tf.TensorArray(dtype=tf.float32, size=n)
+        # Discounted cumulative sums of vectors for computing rewards-to-go and advantage estimates
+        output = tf.TensorArray(dtype=tf.float32, size=tf.shape(x)[0])
+        cumsum = tf.constant(0.0)
 
-        discounted_sum = tf.constant(0.0)
-
-        for i in tf.range(n):
-            reward = x[i] # type: ignore
-            discounted_sum = reward + discount * discounted_sum
-            returns = returns.write(i, discounted_sum)
-
-        returns = returns.stack()[::-1] # type: ignore
-
-        # Normalize returns
-        returns = (returns - tf.math.reduce_mean(returns)) / (tf.math.reduce_std(returns) + 1e-7)
-
-        return returns
+        for i in tf.range(tf.shape(x)[0] - 1, -1, -1):
+            cumsum = x[i] + discount * cumsum
+            output = output.write(i, cumsum)
+        
+        return output.stack()
     
     @tf.function
     def add_tf(self,
@@ -109,23 +98,26 @@ class PPOReplayMemory:
         rewards_buffer = tf.tensor_scatter_nd_update(rewards_buffer, indices[:, None], rewards)
         value_buffer = tf.tensor_scatter_nd_update(value_buffer, indices[:, None], values)
         logprobability_buffer = tf.tensor_scatter_nd_update(logprobability_buffer, indices[:, None], logprobs)
+
+        # append zero to values and rewards
+        values = tf.concat([values, [0.0]], axis=0)
+        rewards = tf.concat([rewards, [0.0]], axis=0)
         
-        advantages = tf.TensorArray(dtype=tf.float32, size=0, dynamic_size=True)
-        returns = tf.TensorArray(dtype=tf.float32, size=0, dynamic_size=True)
+        # compute deltas
+        deltas = rewards[:-1] + gamma * values[1:] - values[:-1]
 
-        for i in tf.range(batch_size, dtype=tf.int32):
-            if tf.cast(dones[i], tf.bool): # type: ignore
-                advantages = advantages.write(i, 0.0)
-                returns = returns.write(i, rewards[i])
-            else:
-                next_value = value_buffer[(count + i + 1) % max_size]
-                next_advantage = advantages_buffer[(count + i + 1) % max_size] # type: ignore
-                delta = rewards[i] + gamma * next_value - values[i]
-                advantages = advantages.write(i, delta + gamma * lam * next_advantage)
-                returns = returns.write(i, rewards[i] + gamma * next_value)
+        # compute returns
+        returns = self.discounted_cumulative_sums_tf(rewards, gamma)[:-1]
 
-        advantages = advantages.stack()
-        returns = returns.stack()
+        # compute advantages
+        advantages = self.discounted_cumulative_sums_tf(deltas, gamma * lam)
+
+        # print all the things
+        # print("rewards", rewards)
+        # print("values", values)
+        # print("deltas", deltas)
+        # print("advantages", advantages)
+        # print("returns", returns)
 
         advantages_buffer = tf.tensor_scatter_nd_update(advantages_buffer, indices[:, None], advantages)
         returns_buffer = tf.tensor_scatter_nd_update(returns_buffer, indices[:, None], returns)
@@ -163,12 +155,28 @@ class PPOReplayMemory:
 
         indices = tf.random.uniform((batch_size,), 0, self.count, dtype=tf.int32)
 
+        # normalize advantages
+        advantages = tf.gather(self.advantages_buffer, indices)
+        advantages = (advantages - tf.math.reduce_mean(advantages)) / (tf.math.reduce_std(advantages) + 1e-7)
+
+
         return HistorySampleType(
             tf.gather(self.states_buffer, indices),
             tf.gather(self.actions_buffer, indices),
             tf.gather(self.logprobability_buffer, indices),
-            tf.gather(self.advantages_buffer, indices),
+            advantages,
         )
+    
+    def sample_critic(self, batch_size) -> HistorySampleCriticType:
+        assert self.count >= batch_size, "buffer contains less samples than batch size"
+
+        indices = tf.random.uniform((batch_size,), 0, self.count, dtype=tf.int32)
+
+        return HistorySampleCriticType(
+            tf.gather(self.states_buffer, indices),
+            tf.gather(self.returns_buffer, indices),
+        )
+
 
     def __len__(self):
         return self.count

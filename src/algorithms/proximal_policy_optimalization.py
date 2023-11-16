@@ -26,9 +26,13 @@ def training_step_ppo(batch,
 
         ratio = tf.exp(logprobabilities(logits, action_buffer, num_of_actions) - logprobability_buffer)
 
-        clipped_ratio = clip(ratio, clip_ratio)
+        min_advantage = tf.where(
+            advantage_buffer > 0,
+            (1 + clip_ratio) * advantage_buffer,
+            (1 - clip_ratio) * advantage_buffer,
+        )
 
-        loss = -tf.reduce_mean(tf.minimum(ratio * advantage_buffer, clipped_ratio * advantage_buffer))
+        loss = -tf.reduce_mean(tf.minimum(ratio * advantage_buffer, min_advantage))
 
     gradients = tape.gradient(loss, actor_model.trainable_variables)
 
@@ -40,7 +44,7 @@ def training_step_ppo(batch,
     tf.summary.scalar('kl', kl, step=step) # type: ignore
     tf.summary.scalar('loss', loss, step=step)
     tf.summary.scalar('mean_ratio', tf.reduce_mean(ratio), step=step)
-    tf.summary.scalar('mean_clipped_ratio', tf.reduce_mean(clipped_ratio), step=step)
+    tf.summary.scalar('mean_clipped_ratio', tf.reduce_mean(min_advantage), step=step)
     tf.summary.scalar('mean_advantage', tf.reduce_mean(advantage_buffer), step=step)
     tf.summary.scalar('mean_logprob', tf.reduce_mean(logprobability_buffer), step=step)
 
