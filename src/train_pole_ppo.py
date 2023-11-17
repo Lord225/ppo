@@ -8,10 +8,8 @@ from algorithms.proximal_policy_optimalization import training_step_critic, trai
 from common import splash_screen
 import config
 import enviroments
-
-
 import os
-os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
+
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--resume", type=str, default=None, help="resume from a model") 
@@ -27,7 +25,7 @@ params = argparse.Namespace()
 
 params.env_name = env.spec.id
 params.version = "v1.0"
-params.DRY_RUN = True
+params.DRY_RUN = False
 
 params.actor_lr  = 0.001
 params.critic_lr = 0.001
@@ -50,7 +48,7 @@ params.lam = 0.97
 params.batch_size = 1024
 
 params.train_interval = 1
-params.iters = 2
+params.iters = 1
 
 
 params.save_freq = 500
@@ -61,8 +59,8 @@ splash_screen(params)
 
 def get_actor():
     if args.resume is not None:
-        model = tf.keras.models.load_model(args.resume+'.h5.actor')
-        print("loaded model from", args.resume)
+        model = tf.keras.models.load_model(args.resume+'.actor.h5')
+        print("loaded model from", args.resume + '.actor.h5')
         return model
 
     observation_input = tf.keras.Input(shape=params.observation_space, dtype=tf.float32)
@@ -73,8 +71,8 @@ def get_actor():
 
 def get_critic():
     if args.resume is not None:
-        model = tf.keras.models.load_model(args.resume+'.h5.critic')
-        print("loaded model from", args.resume)
+        model = tf.keras.models.load_model(args.resume+'.critic.h5')
+        print("loaded model from", args.resume + '.critic.h5')
         return model
 
     observation_input = tf.keras.Input(shape=params.observation_space, dtype=tf.float32)

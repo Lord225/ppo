@@ -67,7 +67,6 @@ class PPOReplayMemory:
         self.actions_buffer = tf.Variable(tf.zeros((max_size), dtype=tf.int32), trainable=False, dtype=tf.int32)
         self.rewards_buffer = tf.Variable(tf.zeros((max_size),  dtype=tf.float32), trainable=False, dtype=tf.float32)
         self.return_buffer = tf.Variable(tf.zeros((max_size),  dtype=tf.float32), trainable=False, dtype=tf.float32)
-        self.value_buffer = tf.Variable(tf.zeros((max_size),  dtype=tf.float32), trainable=False, dtype=tf.float32)
         self.logprobability_buffer = tf.Variable(tf.zeros((max_size),  dtype=tf.float32), trainable=False, dtype=tf.float32)
         
         self.gamma = gamma
@@ -81,9 +80,11 @@ class PPOReplayMemory:
         self.count = 0
 
     
-    @tf.function
+    @tf.function(
+            reduce_retracing=True,
+    )
     def add_tf(self, states, actions, rewards, values, logprobabilities,
-               states_buffer, advantages_buffer, actions_buffer, rewards_buffer, return_buffer, value_buffer, logprobability_buffer,
+               states_buffer, advantages_buffer, actions_buffer, rewards_buffer, return_buffer, logprobability_buffer,
                gamma, lam, max_size, count):
         
         size = len(states)
@@ -92,7 +93,6 @@ class PPOReplayMemory:
         states_buffer = tf.tensor_scatter_nd_update(states_buffer, indices[:, None], states)
         actions_buffer = tf.tensor_scatter_nd_update(actions_buffer, indices[:, None], actions)
         rewards_buffer = tf.tensor_scatter_nd_update(rewards_buffer, indices[:, None], rewards)
-        value_buffer = tf.tensor_scatter_nd_update(value_buffer, indices[:, None], values)
         logprobability_buffer = tf.tensor_scatter_nd_update(logprobability_buffer, indices[:, None], logprobabilities)
         
         count = (count + size) % max_size
@@ -113,24 +113,7 @@ class PPOReplayMemory:
         advantages_buffer = tf.tensor_scatter_nd_update(advantages_buffer, indices[:, None], advantages)
         return_buffer = tf.tensor_scatter_nd_update(return_buffer, indices[:, None], returns)
 
-        # print("States:", states)
-        # print("Actions:", actions)
-        # print("Rewards:", rewards)
-        # print("Values:", values)
-        # print("Log Probabilities:", logprobabilities)
-        # print("States Buffer:", states_buffer)
-        # print("Advantages Buffer:", advantages_buffer)
-        # print("Actions Buffer:", actions_buffer)
-        # print("Rewards Buffer:", rewards_buffer)
-        # print("Return Buffer:", return_buffer)
-        # print("Value Buffer:", value_buffer)
-        # print("Log Probability Buffer:", logprobability_buffer)
-        # print("Gamma:", gamma)
-        # print("Lambda:", lam)
-        # print("Max Size:", max_size)
-        # print("Count:", count)
-        
-        return states_buffer, advantages_buffer, actions_buffer, rewards_buffer, return_buffer, value_buffer, logprobability_buffer, count
+        return states_buffer, advantages_buffer, actions_buffer, rewards_buffer, return_buffer, logprobability_buffer, count
         
 
     def add(self, observations, actions, rewards, values, logprobabilities):
@@ -139,21 +122,33 @@ class PPOReplayMemory:
         gamma = tf.constant(self.gamma, dtype=tf.float32)
         lam = tf.constant(self.lam, dtype=tf.float32)
 
-        states_buffer, advantages_buffer, actions_buffer, rewards_buffer, return_buffer, value_buffer, logprobability_buffer, new_count = self.add_tf(observations, actions, rewards, values, logprobabilities,
-                    self.states_buffer, self.advantages_buffer, self.actions_buffer, self.rewards_buffer, self.return_buffer, self.value_buffer, self.logprobability_buffer,
-                    gamma, lam, max_size, count) # type: ignore
+        states_buffer, advantages_buffer, actions_buffer, rewards_buffer, return_buffer, logprobability_buffer, new_count = self.add_tf(
+                    observations, 
+                    actions, 
+                    rewards, 
+                    values, 
+                    logprobabilities,
+                    self.states_buffer, 
+                    self.advantages_buffer, 
+                    self.actions_buffer, 
+                    self.rewards_buffer, 
+                    self.return_buffer, 
+                    self.logprobability_buffer,
+                    gamma, 
+                    lam, 
+                    max_size, 
+                    count) # type: ignore
         
         self.states_buffer = states_buffer
         self.advantages_buffer = advantages_buffer
         self.actions_buffer = actions_buffer
         self.rewards_buffer = rewards_buffer
         self.return_buffer = return_buffer
-        self.value_buffer = value_buffer
         self.logprobability_buffer = logprobability_buffer
         
         self.count = int(new_count) # type: ignore
         self.real_size = min(self.real_size + len(observations), self.max_size)
-
+    
 
     def sample(self, batch_size):
         assert self.real_size >= batch_size, "buffer contains less samples than batch size"
@@ -169,7 +164,7 @@ class PPOReplayMemory:
             tf.gather(self.logprobability_buffer, indices),
             advantages,
         )
-    
+
 
     def sample_critic(self, batch_size):
         assert self.real_size >= batch_size, "buffer contains less samples than batch size"
@@ -183,6 +178,7 @@ class PPOReplayMemory:
          
     def __len__(self) -> int:
         return self.real_size
+    
 import unittest
 
 # class PPOReplayTest(unittest.TestCase):

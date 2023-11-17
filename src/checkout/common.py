@@ -17,12 +17,17 @@ def run_episode(env, agent, observation_preprocess, save_all: bool = False):
             history_episode = []
 
             while True:
-                # check how obs looks like
-                #plt.imshow(state[:,:,:3])
-                #plt.show()
+                # check how obs looks like (two images)
+                # fig, ax = plt.subplots(1, 2)
+                # ax[0].imshow(state[:,:, 0])
+                # ax[1].imshow(state[:,:, 1])
+                # plt.show()
+
                 
                 state = tf.expand_dims(state, 0)
-                action_logits_t, _ = agent(state)
+                #action_logits_t = agent(state)
+                # ranom
+                action_logits_t = tf.random.uniform((1, 4), -1, 1)
 
                 action_probs_t = tf.nn.softmax(action_logits_t)
 
