@@ -90,8 +90,8 @@ def run():
 
     memory = ReplayMemory(10_000, params.observation_space)
 
-    env_step = enviroments.make_tensorflow_env_step(env, lambda x: enviroments.pacman_transform_observation_stack_big(x, target_size=params.observation_space))
-    env_reset = enviroments.make_tensorflow_env_reset(env, lambda x: enviroments.pacman_transform_observation_stack_big(x, target_size=params.observation_space))
+    env_step = enviroments.make_tensorflow_env_step(env, lambda x: enviroments.pacman_transform_observation_stack_big(x))
+    env_reset = enviroments.make_tensorflow_env_reset(env, lambda x: enviroments.pacman_transform_observation_stack_big(x))
 
     runner = get_episode_runner(env_step)
     runner = tf.function(runner)

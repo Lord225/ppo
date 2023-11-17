@@ -69,3 +69,18 @@ def splash_screen(params: Namespace):
     """, step=0)
     
     return params
+
+def get_file_descriptor(params: Namespace, episode: int):
+    return f"{config.MODELS_DIR}{params.env_name}{params.version}_{config.RUN_NAME}_{episode}"
+
+def get_file_without_extension(filename):
+    dot = filename.find(".")
+    return filename[:dot]
+
+class ModelSaver:
+    def __init__(self, params: Namespace):
+        self.params = params
+
+    def save(self, episode, **kwargs):
+        for k, v in kwargs.items():
+            v.save(get_file_descriptor(self.params, episode) + f".{k}.h5")

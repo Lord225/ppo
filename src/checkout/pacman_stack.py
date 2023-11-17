@@ -22,4 +22,4 @@ state, _ = env.reset()
 
 from checkout.common import run_episode
 
-run_episode(env, model, lambda x: enviroments.pacman_transform_observation_stack(x, (50, 50)))
+run_episode(env, model, lambda x: enviroments.pacman_transform_observation_stack_big_gray(x))

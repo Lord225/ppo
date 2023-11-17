@@ -30,7 +30,7 @@ def pacman_transform_observation_stack(observation, target_size):
     return observation.astype(np.float32)/255
 import matplotlib.pyplot as plt
 
-def pacman_transform_observation_stack_big(observation, target_size):
+def pacman_transform_observation_stack_big(observation):
     observation = observation.__array__()
     # reshpae from (2, 210, 160, 3) to (210, 160, 2, 3)
     observation = np.transpose(observation, (1, 2, 0, 3))

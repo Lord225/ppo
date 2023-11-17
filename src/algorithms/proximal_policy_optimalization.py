@@ -43,12 +43,19 @@ def training_step_ppo(batch,
     kl = tf.reduce_mean(logprobability_buffer - logprobabilities(logits, action_buffer, num_of_actions))
     kl = tf.reduce_mean(kl)
 
-    tf.summary.scalar('kl', kl, step=step) # type: ignore
-    tf.summary.scalar('loss', policy_loss, step=step)
-    tf.summary.scalar('mean_ratio', tf.reduce_mean(ratio), step=step)
-    tf.summary.scalar('mean_clipped_ratio', tf.reduce_mean(min_advantage), step=step)
-    tf.summary.scalar('mean_advantage', tf.reduce_mean(advantage_buffer), step=step)
-    tf.summary.scalar('mean_logprob', tf.reduce_mean(logprobability_buffer), step=step)
+    # tf.summary.scalar('kl', kl, step=step) # type: ignore
+    # tf.summary.scalar('loss', policy_loss, step=step)
+    # tf.summary.scalar('mean_ratio', tf.reduce_mean(ratio), step=step)
+    # tf.summary.scalar('mean_clipped_ratio', tf.reduce_mean(min_advantage), step=step)
+    # tf.summary.scalar('mean_advantage', tf.reduce_mean(advantage_buffer), step=step)
+    # tf.summary.scalar('mean_logprob', tf.reduce_mean(logprobability_buffer), step=step)
+
+    mean_ratio = tf.reduce_mean(ratio)
+    mean_clipped_ratio = tf.reduce_mean(min_advantage)
+    mean_advantage = tf.reduce_mean(advantage_buffer)
+    mean_logprob = tf.reduce_mean(logprobability_buffer)
+
+    return kl, policy_loss, mean_ratio, mean_clipped_ratio, mean_advantage, mean_logprob
 
 @tf.function
 def training_step_critic(
