@@ -25,7 +25,7 @@ params.env_name = env.spec.id
 params.version = "v3.0"
 params.DRY_RUN = False
 
-params.actor_lr  = 0.0001
+params.actor_lr  = 0.00007
 params.critic_lr = 0.0003
 
 params.action_space = env.action_space.n # type: ignore
@@ -35,14 +35,14 @@ params.observation_space = (85, 50, 3*2)
 params.episodes = 100000
 params.max_steps_per_episode = 1000
 
-params.discount_rate = 0.99
+params.discount_rate = 0.995
 
-params.clip_ratio = 0.2
-params.lam = 0.95
+params.clip_ratio = 0.25
+params.lam = 0.97
 
-params.batch_size = 1024
+params.batch_size = 4096
 
-params.train_interval = 1
+params.train_interval = 4
 params.iters = 1
 
 
