@@ -73,3 +73,21 @@ def training_step_critic(
     optimizer.apply_gradients(zip(gradients, critic.trainable_variables))
 
     tf.summary.scalar('critic_loss', loss, step=step) # type: ignore
+
+@tf.function
+def training_step_curiosty(
+        batch,
+        curiosity,
+        optimizer: tf.keras.optimizers.Optimizer,
+        step: int
+):
+    observation_buffer, action_buffer, next_observation_buffer = batch
+
+    with tf.GradientTape() as tape:
+        loss = tf.reduce_mean(tf.square(next_observation_buffer - curiosity(observation_buffer, action_buffer)))
+
+    gradients = tape.gradient(loss, curiosity.trainable_variables)
+    optimizer.apply_gradients(zip(gradients, curiosity.trainable_variables))
+
+    tf.summary.scalar('curiosity_loss', loss, step=step) # type: ignore
+    

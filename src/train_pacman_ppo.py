@@ -25,8 +25,8 @@ params.env_name = env.spec.id
 params.version = "v3.0"
 params.DRY_RUN = False
 
-params.actor_lr  = 0.00007
-params.critic_lr = 0.0003
+params.actor_lr  = 7e-7
+params.critic_lr = 1e-3
 
 params.action_space = env.action_space.n # type: ignore
 params.observation_space_raw = env.observation_space.shape
@@ -37,12 +37,15 @@ params.max_steps_per_episode = 1000
 
 params.discount_rate = 0.995
 
-params.clip_ratio = 0.25
+params.eps_decay_len = 1000
+params.eps_min = 0.1
+
+params.clip_ratio = 0.20
 params.lam = 0.97
 
-params.batch_size = 4096
+params.batch_size = 1024
 
-params.train_interval = 4
+params.train_interval = 2
 params.iters = 1
 
 
@@ -61,10 +64,12 @@ def get_actor():
     observation_input = tf.keras.Input(shape=params.observation_space, dtype=tf.float32)
     x = tf.keras.layers.Conv2D(32, 3, strides=2, activation=tf.nn.elu)(observation_input)
     x = tf.keras.layers.Conv2D(64, 3, strides=2, activation=tf.nn.elu)(x)
-    x = tf.keras.layers.Conv2D(64, 3, strides=2, activation=tf.nn.elu)(x)
+    x = tf.keras.layers.Conv2D(128, 3, strides=2, activation=tf.nn.elu)(x)
+    x = tf.keras.layers.Conv2D(128, 3, strides=2, activation=tf.nn.elu)(x)
     x = tf.keras.layers.Flatten()(x)
+    x = tf.keras.layers.Dense(512, activation=tf.nn.elu)(x)
     x = tf.keras.layers.Dense(256, activation=tf.nn.elu)(x)
-    x = tf.keras.layers.Dense(32, activation=tf.nn.elu)(x)
+    x = tf.keras.layers.Dense(128, activation=tf.nn.elu)(x)
 
     logits = tf.keras.layers.Dense(params.action_space)(x)
     return tf.keras.Model(inputs=observation_input, outputs=logits)
@@ -78,10 +83,12 @@ def get_critic():
     observation_input = tf.keras.Input(shape=params.observation_space, dtype=tf.float32)
     x = tf.keras.layers.Conv2D(32, 3, strides=2, activation=tf.nn.elu)(observation_input)
     x = tf.keras.layers.Conv2D(64, 3, strides=2, activation=tf.nn.elu)(x)
-    x = tf.keras.layers.Conv2D(64, 3, strides=2, activation=tf.nn.elu)(x)
+    x = tf.keras.layers.Conv2D(128, 3, strides=2, activation=tf.nn.elu)(x)
+    x = tf.keras.layers.Conv2D(128, 3, strides=2, activation=tf.nn.elu)(x)
     x = tf.keras.layers.Flatten()(x)
+    x = tf.keras.layers.Dense(512, activation=tf.nn.elu)(x)
     x = tf.keras.layers.Dense(256, activation=tf.nn.elu)(x)
-    x = tf.keras.layers.Dense(32, activation=tf.nn.elu)(x)
+    x = tf.keras.layers.Dense(128, activation=tf.nn.elu)(x)
 
 
     value = tf.squeeze(tf.keras.layers.Dense(1)(x))
@@ -106,7 +113,6 @@ def log_stats(stats, step):
     tf.summary.scalar('mean_advantage', np.mean([x[4] for x in stats]), step=step)
     tf.summary.scalar('mean_logprob', np.mean([x[5] for x in stats]), step=step)
 
-    
     
 def run():
     running_avg = deque(maxlen=200)

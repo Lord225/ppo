@@ -25,13 +25,11 @@ def run_episode(env, agent, observation_preprocess, save_all: bool = False):
 
                 
                 state = tf.expand_dims(state, 0)
-                #action_logits_t = agent(state)
-                # ranom
-                action_logits_t = tf.random.uniform((1, 4), -1, 1)
+                action_logits_t = agent(state)
 
-                action_probs_t = tf.nn.softmax(action_logits_t)
-
-                action = tf.argmax(action_probs_t, axis=1)[0]
+                action = tf.squeeze(tf.random.categorical(action_logits_t, 1), axis=1)
+                action = tf.cast(action, tf.int32)
+                action = tf.squeeze(action)
 
                 state, reward, done, _, _ = env.step(int(action))
 
