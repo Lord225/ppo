@@ -25,7 +25,7 @@ params.env_name = env.spec.id
 params.version = "v3.0"
 params.DRY_RUN = False
 
-params.actor_lr  = 7e-7
+params.actor_lr  = 3e-7
 params.critic_lr = 1e-3
 
 params.action_space = env.action_space.n # type: ignore
@@ -43,10 +43,10 @@ params.eps_min = 0.1
 params.clip_ratio = 0.20
 params.lam = 0.97
 
-params.batch_size = 1024
+params.batch_size = 2048
 
-params.train_interval = 2
-params.iters = 1
+params.train_interval = 1
+params.iters = 5
 
 
 params.save_freq = 300
