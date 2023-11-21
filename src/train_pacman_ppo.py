@@ -25,8 +25,8 @@ params.env_name = env.spec.id
 params.version = "v3.0"
 params.DRY_RUN = False
 
-params.actor_lr  = 3e-7
-params.critic_lr = 1e-3
+params.actor_lr  = 1e-7
+params.critic_lr = 3e-5
 
 params.action_space = env.action_space.n # type: ignore
 params.observation_space_raw = env.observation_space.shape
@@ -35,7 +35,7 @@ params.observation_space = (85, 50, 3*2)
 params.episodes = 100000
 params.max_steps_per_episode = 1000
 
-params.discount_rate = 0.995
+params.discount_rate = 0.99
 
 params.eps_decay_len = 1000
 params.eps_min = 0.1
@@ -43,13 +43,13 @@ params.eps_min = 0.1
 params.clip_ratio = 0.20
 params.lam = 0.97
 
-params.batch_size = 2048
+params.batch_size = 1024
 
-params.train_interval = 1
-params.iters = 5
+params.train_interval = 5
+params.iters = 8
 
 
-params.save_freq = 300
+params.save_freq = 1000
 if args.resume is not None:
     params.resumed = 'resumed from: ' + os.path.basename(args.resume)
 
@@ -151,15 +151,15 @@ def run():
 
         if len(memory) >= params.batch_size and int(episode) % params.train_interval == 0:
             stats = [] # kl, policy_loss, mean_ratio, mean_clipped_ratio, mean_advantage, mean_logprob
+            batch = memory.sample(batch_size)
             for _ in range(params.iters):
-                batch = memory.sample(batch_size)
                 history = training_step_ppo(batch, actor, action_space, clip_ratio, policy_optimizer, episode)
                 stats.append(history)
 
             log_stats(stats, episode)
 
+            batch = memory.sample_critic(batch_size)
             for _ in range(params.iters):
-                batch = memory.sample_critic(batch_size)
                 training_step_critic(batch, critic, value_optimizer, episode)
 
             #memory.reset()
