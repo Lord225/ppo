@@ -43,11 +43,6 @@ def get_episode_runner(tf_env_step: Callable[[tf.Tensor], Tuple[tf.Tensor, tf.Te
                 tf.cast(tf.squeeze(tf.random.categorical(action_probs_t, 1), axis=1), tf.int64)[0], # type: ignore
             )), dtype=tf.int32)
 
-            
-            
-
-        
-
             actions = actions.write(t, action)
 
             # Apply action to the environment to get next state and reward
