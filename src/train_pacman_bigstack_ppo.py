@@ -17,20 +17,20 @@ parser.add_argument("--resume", type=str, default=None, help="resume from a mode
 args = parser.parse_args()
 
 
-env = enviroments.get_packman_stack_frames()
+env = enviroments.get_pacman_stack_frames_big()
 
 params = argparse.Namespace()
 
 params.env_name = env.spec.id
-params.version = "v3.0"
+params.version = "v4.0"
 params.DRY_RUN = False
 
-params.actor_lr  = 3e-8
-params.critic_lr = 1e-5
+params.actor_lr  = 1e-6
+params.critic_lr = 3e-5
 
 params.action_space = env.action_space.n # type: ignore
 params.observation_space_raw = env.observation_space.shape
-params.observation_space = (85, 50, 3*2)
+params.observation_space = (85, 50, 6)
 
 params.episodes = 100000
 params.max_steps_per_episode = 1000
@@ -40,13 +40,13 @@ params.discount_rate = 0.995
 params.eps_decay_len = 1000
 params.eps_min = 0.1
 
-params.clip_ratio = 0.25
+params.clip_ratio = 0.20
 params.lam = 0.97
 
-params.batch_size = 8000
+params.batch_size = 4096
 
-params.train_interval = 10
-params.iters = 80
+params.train_interval = 1
+params.iters = 2
 
 
 params.save_freq = 1000
@@ -110,7 +110,6 @@ def log_stats(stats, step):
     tf.summary.scalar('loss', np.mean([x[1] for x in stats]), step=step)
     tf.summary.scalar('mean_ratio', np.mean([x[2] for x in stats]), step=step)
     tf.summary.scalar('mean_clipped_ratio', np.mean([x[3] for x in stats]), step=step)
-    tf.summary.scalar('mean_advantage', np.mean([x[4] for x in stats]), step=step)
     tf.summary.scalar('mean_logprob', np.mean([x[5] for x in stats]), step=step)
 
     
@@ -119,8 +118,8 @@ def run():
 
     memory = PPOReplayMemory(20_000, params.observation_space)
 
-    env_step = enviroments.make_tensorflow_env_step(env, lambda x: enviroments.pacman_transform_observation_stack_big(x))
-    env_reset = enviroments.make_tensorflow_env_reset(env, lambda x: enviroments.pacman_transform_observation_stack_big(x))
+    env_step = enviroments.make_tensorflow_env_step(env, lambda x: enviroments.pacman_transform_grayscale_observation_stack_big(x))
+    env_reset = enviroments.make_tensorflow_env_reset(env, lambda x: enviroments.pacman_transform_grayscale_observation_stack_big(x))
 
     runner = get_ppo_runner(env_step)
     runner = tf.function(runner)

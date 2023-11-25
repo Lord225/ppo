@@ -1,4 +1,5 @@
 from re import A
+from types import new_class
 from typing import Any, Callable, Tuple
 import gym
 import numpy as np
@@ -7,12 +8,18 @@ import cv2
 
 from gym.wrappers import frame_stack
 
-def get_packman(human: bool = False):
-    return gym.make("ALE/MsPacman-v5", obs_type="image", frameskip=4, render_mode="human" if human else "rgb_array")
+def get_packman(human: bool = False, grayscale=False):
+    return gym.make("ALE/MsPacman-v5", obs_type="image" if not grayscale else "grayscale", frameskip=4, render_mode="human" if human else "rgb_array")
+
 
 def get_packman_stack_frames(human: bool = False):
     env = get_packman(human)
     env = frame_stack.FrameStack(env, 2)
+    return env
+
+def get_pacman_stack_frames_big(human: bool = False):
+    env = get_packman(human)
+    env = frame_stack.FrameStack(env, 6)
     return env
 
 def pacman_transform_observation(observation, target_size):
@@ -39,6 +46,16 @@ def pacman_transform_observation_stack_big(observation):
     # resize to target size
     observation = cv2.resize(observation,  (50, 105), interpolation=cv2.INTER_NEAREST)
     # cut lower part of the image
+    observation = observation[:85, :, :] # shape (85, 50, 6)
+    return observation.astype(np.float32)/255
+
+
+def pacman_transform_grayscale_observation_stack_big(observation):
+    observation = observation.__array__()
+    observation = [cv2.cvtColor(observation[i], cv2.COLOR_RGB2HSV)[:,:,0] for i in range(observation.shape[0])]
+    observation = np.stack(observation, axis=-1)
+    observation = np.reshape(observation, (observation.shape[0], observation.shape[1], -1))
+    observation = cv2.resize(observation,  (50, 105), interpolation=cv2.INTER_NEAREST)
     observation = observation[:85, :, :] # shape (85, 50, 6)
     return observation.astype(np.float32)/255
     
