@@ -28,8 +28,8 @@ params.env_name = "connect_four_v3"
 params.version = "v2.0"
 params.DRY_RUN = False
 
-params.actor_lr  = 1e-6
-params.critic_lr = 1e-5
+params.actor_lr  = 1e-5
+params.critic_lr = 3e-4
 
 params.action_space = 7
 params.observation_space = (6, 7, 2)
@@ -42,18 +42,18 @@ params.eps_decay_len = 5000
 params.eps_min = 0.1
 
 params.clip_ratio = 0.20
-params.lam = 0.95
+params.lam = 0.97
 
-params.batch_size = 512
+params.batch_size = 2000
 
-params.train_interval = 1
-params.iters = 10
+params.train_interval = 10
+params.iters = 1
 
 params.save_freq = 1000
 params.eval_freq = 1000
 params.copy_player_freq = 1000
 params.update_historic_freq = 5000
-params.train_on_historic_freq = 3
+params.train_on_historic_freq = 4
 
 splash_screen(params)
 
@@ -68,7 +68,13 @@ def step(action, action_none):
 
     done = termination or truncation
     state = observation['observation'] # type: ignore
+    # current player
+    player = 0 if env.agent_selection == 'player_0' else 1
+
+    # add player to state
+    state = np.append(state, np.full((6, 7, 1), player), axis=2)
     state = np.array(state, np.float32)
+
 
     mask = observation["action_mask"] # type: ignore
     return (np.array(state, np.float32), np.array(mask, np.float32), np.array(reward, np.float32), np.array(done, np.int32))
@@ -82,33 +88,35 @@ def tf_env_step(action, action_none):
 # define models
 def get_model():
     # observation input
-    observation_input = tf.keras.layers.Input(shape=(6, 7, 2), name="observation_input")
+    observation_input = tf.keras.layers.Input(shape=(6, 7, 3), name="observation_input")
 
     # convolutional layers
-    x = tf.keras.layers.Conv2D(64, 3, padding='same', activation="relu")(observation_input)
+    x = tf.keras.layers.Conv2D(64, 3, padding='same', activation="elu")(observation_input)
+    x = tf.keras.layers.Conv2D(64, 3, padding='same', activation="elu")(x)
+    x = tf.keras.layers.Conv2D(64, 3, padding='same', activation="elu")(x)
     x = tf.keras.layers.Flatten()(x)
-    x = tf.keras.layers.Concatenate()([x, player_input])
-    x = tf.keras.layers.Dense(512, activation="relu")(x)
-    x = tf.keras.layers.Dense(512, activation="relu")(x)
-    x = tf.keras.layers.Dense(256, activation="relu")(x)
-    output = tf.keras.layers.Dense(7, activation="softmax")(x)
+    x = tf.keras.layers.Dense(512, activation="elu")(x)
+    x = tf.keras.layers.Dense(512, activation="elu")(x)
+    x = tf.keras.layers.Dense(256, activation="elu")(x)
+    output = tf.keras.layers.Dense(7)(x)
 
-    return tf.keras.Model(inputs=[observation_input, player_input], outputs=output)
+    return tf.keras.Model(inputs=observation_input, outputs=output)
 
 def get_critic():
     # observation input
-    observation_input = tf.keras.layers.Input(shape=(6, 7, 2), name="observation_input")
+    observation_input = tf.keras.layers.Input(shape=(6, 7, 3), name="observation_input")
 
     # convolutional layers
-    x = tf.keras.layers.Conv2D(64, 3, padding='same', activation="relu")(observation_input)
+    x = tf.keras.layers.Conv2D(64, 3, padding='same', activation="elu")(observation_input)
+    x = tf.keras.layers.Conv2D(64, 3, padding='same', activation="elu")(x)
+    x = tf.keras.layers.Conv2D(64, 3, padding='same', activation="elu")(x)
     x = tf.keras.layers.Flatten()(x)
-    x = tf.keras.layers.Concatenate()([x, player_input])
-    x = tf.keras.layers.Dense(512, activation="relu")(x)
-    x = tf.keras.layers.Dense(512, activation="relu")(x)
-    x = tf.keras.layers.Dense(256, activation="relu")(x)
+    x = tf.keras.layers.Dense(512, activation="elu")(x)
+    x = tf.keras.layers.Dense(512, activation="elu")(x)
+    x = tf.keras.layers.Dense(256, activation="elu")(x)
     output = tf.keras.layers.Dense(1)(x)
 
-    return tf.keras.Model(inputs=[observation_input, player_input], outputs=output)
+    return tf.keras.Model(inputs=observation_input, outputs=output)
 
 player1 = get_model()
 player2 = get_model()
@@ -131,8 +139,8 @@ optimizer1 = tf.keras.optimizers.Adam(learning_rate=params.actor_lr)
 optimizer2 = tf.keras.optimizers.Adam(learning_rate=params.actor_lr)
 optimizer_critic = tf.keras.optimizers.Adam(learning_rate=params.critic_lr)
 
-memoryp1 = PPOReplayMemory(10_000, (6, 7, 2)) # exp as p1
-memoryp2 = PPOReplayMemory(10_000, (6, 7, 2)) # exp as p2
+memoryp1 = PPOReplayMemory(10_000, (6, 7, 3)) # exp as p1
+memoryp2 = PPOReplayMemory(10_000, (6, 7, 3)) # exp as p2
 
 t = tqdm.tqdm(range(params.episodes))
 
@@ -152,9 +160,16 @@ def reset_env():
     env.reset()
     observation, reward, termination, truncation, _ = env.last()
     state = observation['observation'] # type: ignore
-    state = np.array(state, np.float32)
     mask = observation["action_mask"] # type: ignore
     mask = np.array(mask, np.float32)
+
+    # current player
+    player = 0 if env.agent_selection == 'player_0' else 1
+
+    # add 3rd plane of all zeros or ones depending on player
+    state = np.append(state, np.full((6, 7, 1), player), axis=2)
+    state = np.array(state, np.float32)
+
     return (state, mask)
 
 action_space = tf.constant(params.action_space, dtype=tf.int32)
@@ -184,7 +199,7 @@ for i in t:
             output = run_episode_selfplay(state, mask, player1, player1, critic, tf_env_step, max_steps_per_episode, action_space, epsilon) # type: ignore
             P1 = False
     else:
-        if i % 2 == 0:
+        if np.random.uniform() < 0.5:
             # run with self as p1
             output = run_episode_selfplay(state, mask, player1, player2, critic, tf_env_step, max_steps_per_episode, action_space, epsilon) # type: ignore
             P1 = True
@@ -203,7 +218,7 @@ for i in t:
     else:
         memoryp2.add(states_p2, actions_p2, rewards_p2, values_p2, log_probs_p2)
         reward_sum = sum(rewards_p2)
-        running_avg.append(-reward_sum)
+        running_avg.append(reward_sum)
 
     avg = sum(running_avg)/len(running_avg)
 
@@ -254,8 +269,8 @@ for i in t:
             training_step_critic_selfplay(batch1, batch2, critic, optimizer_critic, episode)
 
         # clear memory after training
-        memoryp1.reset()
-        memoryp2.reset()
+        # memoryp1.reset()
+        # memoryp2.reset()
 
     # copy player1 to player2
     if i % params.copy_player_freq == 0:
@@ -296,8 +311,8 @@ for i in t:
             output = evaluate_selfplay(
                 state,
                 mask, 
-                lambda obs, p: player1([obs, p], training=False), # type: ignore 
-                lambda obs, p: np.random.uniform(size=(1, 7)), # type: ignore 
+                lambda obs: player1(obs, training=False), # type: ignore 
+                lambda obs: np.random.uniform(size=(1, 7)), # type: ignore 
                 critic,
                 tf_env_step, # type: ignore
                 action_space,
@@ -314,8 +329,8 @@ for i in t:
             output = evaluate_selfplay(
                 state,
                 mask, 
-                lambda obs, player: player1([obs, player], training=False), # type: ignore
-                lambda obs, player: historic_player([obs, player], training=False), # type: ignore
+                lambda obs: player1(obs, training=False), # type: ignore
+                lambda obs: historic_player(obs, training=False), # type: ignore
                 critic,
                 tf_env_step, # type: ignore
                 action_space,
@@ -332,8 +347,8 @@ for i in t:
             output = evaluate_selfplay(
                 state,
                 mask, 
-                lambda obs, player: player1([obs, player], training=False), # type: ignore
-                lambda obs, player: player2([obs, player], training=False), # type: ignore
+                lambda obs: player1(obs, training=False), # type: ignore
+                lambda obs: player2(obs, training=False), # type: ignore
                 critic,
                 tf_env_step, # type: ignore
                 action_space,
@@ -365,6 +380,3 @@ for i in t:
         tf.summary.scalar('eval_random_avg_length', random_avg_length, step=i)
         tf.summary.scalar('eval_historic_avg_length', historic_avg_length, step=i)
         tf.summary.scalar('eval_self_avg_length', self_avg_length, step=i)
-
-
-    

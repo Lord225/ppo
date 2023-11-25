@@ -29,33 +29,51 @@ if args.model2 is not None:
     model2 = tf.keras.models.load_model(args.model2)
 else:
     model2 = model
-
+optimal_ratio = 0
+total = 0
 while True:
     env.reset()
+
     # run the episode
     for agent in env.agent_iter():
         observation, reward, term, tru, info = env.last()
 
         if term or tru:
+            print("game over")
             break
-            
         
         player = 0 if agent == 'player_0' else 1
         
-        state = [observation['observation'].reshape(1, 6, 7, 2), np.array([player])] # type: ignore
+        state = observation['observation'] # type: ignore
+
+        state = np.append(state, np.full((6, 7, 1), player), axis=2)
+        state = np.array(state, np.float32)
+        state = state.reshape(1, 6, 7, 3)
+
         
         if player == 0:
-            action = model(state)[0] # type: ignore
+            logits = model(state) # type: ignore
         else:
-            action = model2(state)[0] # type: ignore
+            logits = model2(state) # type: ignore
         
         legal_moves = observation['action_mask'] # type: ignore
         
-        # categorical action
-        action = np.argmax(action * legal_moves)
+        # random categorical action, apply player mask
+        logits = tf.where(legal_moves, logits, -1e10)
+        action = int(tf.squeeze(tf.random.categorical(logits, 1), axis=1))
 
+        argmax = np.argmax(logits)
+
+        optimal_ratio += argmax == action
+        total += 1
+
+        print("player", agent, "turn, optimal: ", argmax, "action: ", action)
+        
+        print("logits: ", ', '.join([f'{float(x):.2f}' for x in tf.squeeze(logits).numpy()]))
+        print("optimal ratio: ", optimal_ratio/total)
+        
         # step the environment
-        env.step(action)
+        env.step(argmax)
 
     
 
