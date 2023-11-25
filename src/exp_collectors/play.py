@@ -130,6 +130,169 @@ def get_ppo_runner(tf_env_step: Callable[[tf.Tensor], Tuple[tf.Tensor, tf.Tensor
     return run_episode
 
 
+@tf.function
+def run_episode_selfplay(
+    observation,
+    mask,
+    player1: tf.keras.Model,
+    player2: tf.keras.Model,
+    critic: tf.keras.Model,
+    tf_env_step: Callable[[tf.Tensor, tf.Tensor], Tuple[tf.Tensor, tf.Tensor, tf.Tensor, tf.Tensor]],
+    max_steps: int,
+    env_actions: int,
+    epsilon: float,      
+):
+    # prepare buffers (numpy)
+    states_p1 = tf.TensorArray(dtype=tf.float32, size=0, dynamic_size=True)
+    actions_p1 = tf.TensorArray(dtype=tf.int32, size=0, dynamic_size=True)
+    rewards_p1 = tf.TensorArray(dtype=tf.float32, size=0, dynamic_size=True)
+    values_p1 = tf.TensorArray(dtype=tf.float32, size=0, dynamic_size=True)
+    log_probs_p1 = tf.TensorArray(dtype=tf.float32, size=0, dynamic_size=True)
+
+    states_p2 = tf.TensorArray(dtype=tf.float32, size=0, dynamic_size=True)
+    actions_p2 = tf.TensorArray(dtype=tf.int32, size=0, dynamic_size=True)
+    rewards_p2 = tf.TensorArray(dtype=tf.float32, size=0, dynamic_size=True)
+    values_p2 = tf.TensorArray(dtype=tf.float32, size=0, dynamic_size=True)
+    log_probs_p2 = tf.TensorArray(dtype=tf.float32, size=0, dynamic_size=True)
+
+    state = observation
+    next_iteration_is_done = False
+
+    initial_state_shape = state.shape
+    initial_mask_shape = mask.shape
+
+    for t in tf.range(max_steps):
+        # Convert state into a batched tensor (batch size = 1)
+        state = tf.expand_dims(state, 0)
+
+        current_player = t % 2
+        current_player_tensor = tf.reshape(current_player, [1])
+        
+        # Run the model and to get action probabilities and critic value
+        if current_player == 0:
+            action_logits_t = player1([state, current_player_tensor])
+        else:
+            action_logits_t = player2([state, current_player_tensor])
+
+        value_t = critic([state, [current_player_tensor]])
+
+        masked_action_logits_t = tf.where(tf.cast(mask, tf.bool), action_logits_t, -1e9)
+        masked_action_random = tf.where(tf.cast(mask, tf.bool), tf.random.uniform([1, env_actions]), -1e9)
+
+        # epsilon greedy
+        action = tf.squeeze(tf.where(
+                tf.random.uniform([1]) < tf.cast(epsilon, tf.float32),
+                # Random action, use mask to make sure it is legal
+                tf.cast(tf.squeeze(tf.random.categorical(masked_action_random, 1), axis=1), tf.int32)[0], # type: ignore
+                # categorical action
+                tf.cast(tf.squeeze(tf.random.categorical(masked_action_logits_t, 1), axis=1), tf.int32)[0], # type: ignore
+            ))
+        
+        # action = tf.squeeze(tf.random.categorical(masked_action_logits_t, 1), axis=1) 
+        # action = tf.cast(action, tf.int32)
+        # action = tf.squeeze(action)
+
+        next_state, action_mask, reward, done = tf_env_step(action, next_iteration_is_done) # type: ignore
+        next_state.set_shape(initial_state_shape)
+        action_mask.set_shape(initial_mask_shape)
+
+        log_prob = logprobabilities(action_logits_t, action, env_actions)
+
+        # store results
+        if current_player == 0:
+            states_p1 = states_p1.write(t, tf.squeeze(state))
+            actions_p1 = actions_p1.write(t, action)
+            rewards_p1 = rewards_p1.write(t, reward)
+            values_p1 = values_p1.write(t, tf.squeeze(value_t))
+            log_probs_p1 = log_probs_p1.write(t, tf.squeeze(log_prob))
+        else:
+            states_p2 = states_p2.write(t, tf.squeeze(state))
+            actions_p2 = actions_p2.write(t, action)
+            rewards_p2 = rewards_p2.write(t, reward)
+            values_p2 = values_p2.write(t, tf.squeeze(value_t))
+            log_probs_p2 = log_probs_p2.write(t, tf.squeeze(log_prob))
+
+        state = next_state
+        mask = action_mask
+
+        if next_iteration_is_done:
+            break
+    
+        if tf.cast(done, tf.bool): # type: ignore
+            next_iteration_is_done = True
+
+    states_p1 = states_p1.stack()
+    actions_p1 = actions_p1.stack()
+    rewards_p1 = rewards_p1.stack()
+    values_p1 = values_p1.stack()
+    log_probs_p1 = log_probs_p1.stack()
+
+    states_p2 = states_p2.stack()
+    actions_p2 = actions_p2.stack()
+    rewards_p2 = rewards_p2.stack()
+    values_p2 = values_p2.stack()
+    log_probs_p2 = log_probs_p2.stack()
+
+    return (states_p1, states_p2, actions_p1, actions_p2, rewards_p1, rewards_p2, values_p1, values_p2, log_probs_p1, log_probs_p2)
+
+# run one episode of selfplay and determine the winner
+def evaluate_selfplay(
+    observation,
+    mask,
+    player1: Callable[[tf.Tensor, tf.Tensor], tf.Tensor],
+    player2: Callable[[tf.Tensor, tf.Tensor], tf.Tensor],
+    critic: tf.keras.Model,
+    tf_env_step: Callable[[tf.Tensor, tf.Tensor], Tuple[tf.Tensor, tf.Tensor, tf.Tensor, tf.Tensor]],
+    env_actions: int,
+    max_steps: int
+    ):
+
+    state = observation
+    next_iteration_is_done = False
+
+    initial_state_shape = state.shape
+    initial_mask_shape = mask.shape
+
+    for t in tf.range(max_steps):
+        # Convert state into a batched tensor (batch size = 1)
+        state = tf.expand_dims(state, 0)
+
+        current_player = t % 2
+        current_player_tensor = tf.reshape(current_player, [1])
+        
+        # Run the model and to get action probabilities and critic value
+        if current_player == 0:
+            action_logits_t = player1(state, current_player_tensor)
+        else:
+            action_logits_t = player2(state, current_player_tensor)
+
+        value_t = critic([state, [current_player_tensor]])
+
+        masked_action_logits_t = tf.where(tf.cast(mask, tf.bool), action_logits_t, -1e9)
+        masked_action_random = tf.where(tf.cast(mask, tf.bool), tf.random.uniform([1, env_actions]), -1e9)
+
+        # epsilon greedy
+        action = tf.cast(tf.squeeze(tf.random.categorical(masked_action_logits_t, 1), axis=1), tf.int32)[0] # type: ignore
+        
+
+        next_state, action_mask, reward, done = tf_env_step(action, next_iteration_is_done) # type: ignore
+
+        next_state.set_shape(initial_state_shape)
+        action_mask.set_shape(initial_mask_shape)
+
+        state = next_state
+        mask = action_mask
+
+        if next_iteration_is_done:
+            # determine winner
+            if current_player == 0:
+                return 0, int(t)
+            else:
+                return 1, int(t)
+            
+        if tf.cast(done, tf.bool): # type: ignore
+            next_iteration_is_done = True
+
 
 
 def get_curius_ppo_runner(tf_env_step: Callable[[tf.Tensor], Tuple[tf.Tensor, tf.Tensor, tf.Tensor]]):
