@@ -75,13 +75,13 @@ def training_step_ppo_selfplay(
     logprobability_buffer = tf.concat([logprobability_bufferp1, logprobability_bufferp2], axis=0)
     advantage_buffer = tf.concat([advantage_bufferp1, advantage_bufferp2], axis=0)
     # create new buffer that will contain 0 for player 1 and 1 for player 2, (batchsize,)
-    batchsize1 = tf.shape(observation_bufferp1)[0]
-    batchsize2 = tf.shape(observation_bufferp2)[0]
-    player_buffer = tf.concat([tf.zeros((batchsize1, 1)), tf.ones((batchsize2, 1))], axis=0)
+    # batchsize1 = tf.shape(observation_bufferp1)[0]
+    # batchsize2 = tf.shape(observation_bufferp2)[0]
+    # player_buffer = tf.concat([tf.zeros((batchsize1, 1)), tf.ones((batchsize2, 1))], axis=0)
 
 
     with tf.GradientTape() as tape: 
-        logits = actor([observation_buffer, player_buffer])
+        logits = actor(observation_buffer)
         
         ratio = tf.exp(
             logprobabilities(logits, action_buffer, num_of_actions)
@@ -150,13 +150,13 @@ def training_step_critic_selfplay(
     observation_buffer = tf.concat([observation_bufferp1, observation_bufferp2], axis=0)
     target_buffer = tf.concat([target_bufferp1, target_bufferp2], axis=0)
     # create new buffer that will contain 0 for player 1 and 1 for player 2, (batchsize,)
-    batchsize1 = tf.shape(observation_bufferp1)[0]
-    batchsize2 = tf.shape(observation_bufferp2)[0]
-    player_buffer = tf.concat([tf.zeros((batchsize1, 1)), tf.ones((batchsize2, 1))], axis=0)
+    #batchsize1 = tf.shape(observation_bufferp1)[0]
+    #batchsize2 = tf.shape(observation_bufferp2)[0]
+    #player_buffer = tf.concat([tf.zeros((batchsize1, 1)), tf.ones((batchsize2, 1))], axis=0)
 
     
     with tf.GradientTape() as tape:
-        values = critic([observation_buffer, player_buffer])
+        values = critic(observation_buffer)
         loss = tf.reduce_mean(tf.square(target_buffer - values))
 
     gradients = tape.gradient(loss, critic.trainable_variables)
