@@ -25,11 +25,11 @@ args = parser.parse_args()
 params = argparse.Namespace()
 
 params.env_name = "connect_four_v3"
-params.version = "v2.0"
+params.version = "v4.0"
 params.DRY_RUN = False
 
-params.actor_lr  = 1e-5
-params.critic_lr = 3e-4
+params.actor_lr  = 1e-6
+params.critic_lr = 1e-5
 
 params.action_space = 7
 params.observation_space = (6, 7, 2)
@@ -177,7 +177,8 @@ max_steps_per_episode = tf.constant(params.max_steps_per_episode, dtype=tf.int32
 batch_size = tf.constant(params.batch_size, dtype=tf.int64)
 clip_ratio = tf.constant(params.clip_ratio, dtype=tf.float32)
 
-running_avg = deque(maxlen=200)
+running_avgp1 = deque(maxlen=200)
+running_avgp2 = deque(maxlen=200)
 
 for i in t:
     env.reset()
@@ -189,54 +190,69 @@ for i in t:
 
     state, mask = reset_env()
 
-    if params.train_on_historic_freq > 0 and i % params.train_on_historic_freq == 0:
-        if np.random.uniform() < 0.5:
-            # run with historic player
-            output = run_episode_selfplay(state, mask, player1, historic_player, critic, tf_env_step, max_steps_per_episode, action_space, epsilon) # type: ignore
-            P1 = True
-        else: 
-            # run with self
-            output = run_episode_selfplay(state, mask, player1, player1, critic, tf_env_step, max_steps_per_episode, action_space, epsilon) # type: ignore
-            P1 = False
-    else:
-        if np.random.uniform() < 0.5:
-            # run with self as p1
-            output = run_episode_selfplay(state, mask, player1, player2, critic, tf_env_step, max_steps_per_episode, action_space, epsilon) # type: ignore
-            P1 = True
-        else: 
-            # run with self as p2
-            output = run_episode_selfplay(state, mask, player2, player1, critic, tf_env_step, max_steps_per_episode, action_space, epsilon) # type: ignore
-            P1 = False
-        
+
+    if np.random.uniform() < 0.5:
+        # run with self as p1
+        output = run_episode_selfplay(state, mask, player1, player2, critic, tf_env_step, max_steps_per_episode, action_space, epsilon) # type: ignore
+        P1 = True
+    else: 
+        # run with self as p2
+        output = run_episode_selfplay(state, mask, player2, player1, critic, tf_env_step, max_steps_per_episode, action_space, epsilon) # type: ignore
+        P1 = False
+    
     (states_p1, states_p2, actions_p1, actions_p2, rewards_p1, rewards_p2, values_p1, values_p2, log_probs_p1, log_probs_p2) = output # type: ignore
 
     # take only player1 data
+    # if P1:
+    #     memoryp1.add(states_p1, actions_p1, rewards_p1, values_p1, log_probs_p1)
+    #     reward_sum = sum(rewards_p1)
+    #     running_avg.append(reward_sum)
+    # else:
+    #     memoryp2.add(states_p2, actions_p2, rewards_p2, values_p2, log_probs_p2)
+    #     reward_sum = sum(rewards_p2)
+    #     running_avg.append(reward_sum)
+
+    # take both players data
+    # memoryp1.add(states_p1, actions_p1, rewards_p1, values_p1, log_probs_p1)
+    # memoryp2.add(states_p2, actions_p2, rewards_p2, values_p2, log_probs_p2)
+    
+    # memoryp1 will contain data only from p1 perspective
     if P1:
         memoryp1.add(states_p1, actions_p1, rewards_p1, values_p1, log_probs_p1)
-        reward_sum = sum(rewards_p1)
-        running_avg.append(reward_sum)
-    else:
         memoryp2.add(states_p2, actions_p2, rewards_p2, values_p2, log_probs_p2)
-        reward_sum = sum(rewards_p2)
-        running_avg.append(reward_sum)
+        reward_sump1 = sum(rewards_p1)
+        reward_sump2 = sum(rewards_p2)
+    else:
+        memoryp1.add(states_p2, actions_p2, rewards_p2, values_p2, log_probs_p2)
+        memoryp2.add(states_p1, actions_p1, rewards_p1, values_p1, log_probs_p1)
+        reward_sump2 = sum(rewards_p1)
+        reward_sump1 = sum(rewards_p2)
+       
 
-    avg = sum(running_avg)/len(running_avg)
+    running_avgp1.append(reward_sump1)
+    running_avgp2.append(reward_sump2)
 
-    t.set_description(f"Avg: {avg:.2f} - Iterations: {states_p1.shape[0]} size: {len(memoryp1)}, {len(memoryp2)}")
+    avgp1 = sum(running_avgp1)/len(running_avgp1)
+    avgp2 = sum(running_avgp2)/len(running_avgp2)
+    
+
+    t.set_description(f"Avg: {avgp1:.2f} - size: {len(memoryp1)}, {len(memoryp2)}")
 
     # tensorboard
-    tf.summary.scalar('reward', reward_sum, step=i)
-    tf.summary.scalar('reward_avg', avg, step=i)
-    tf.summary.scalar('lenght', states_p1.shape[0], step=i)
+    tf.summary.scalar('reward', reward_sump1, step=i)
+    tf.summary.scalar('reward_avg', avgp1, step=i)
+    tf.summary.scalar('reward_p2', reward_sump2, step=i)
+    tf.summary.scalar('reward_avg_p2', avgp2, step=i)
+    tf.summary.scalar('lenght', states_p1.shape[0] + states_p2.shape[0], step=i)
 
     # train
     if len(memoryp1) > batch_size and len(memoryp2) > batch_size and i % params.train_interval == 0:
-        batch1 = memoryp1.sample(batch_size)
-        batch2 = memoryp2.sample(batch_size)
-
         stats = []
 
         for j in range(params.iters):
+            batch1 = memoryp1.sample(batch_size)
+            batch2 = memoryp1.sample(batch_size)
+
             history = training_step_ppo_selfplay_p1(
                 batch1,
                 batch2,
@@ -247,25 +263,26 @@ for i in t:
                 episode,
             ) # type: ignore
             stats.append(history)
+            
+            batch1 = memoryp2.sample(batch_size)
+            batch2 = memoryp2.sample(batch_size)
 
-        # history = training_step_ppo_selfplay_p2(
-        #     batch1,
-        #     batch2,
-        #     player2,
-        #     action_space,
-        #     clip_ratio,
-        #     optimizer2,
-        #     episode,
-        # ) # type: ignore
-
-        # stats.append(history)
+            history = training_step_ppo_selfplay_p2(
+                batch1,
+                batch2,
+                player2,
+                action_space,
+                clip_ratio,
+                optimizer2,
+                episode,
+            ) # type: ignore
+            stats.append(history)
 
         log_stats(stats, episode)
 
-        batch1 = memoryp1.sample_critic(batch_size)
-        batch2 = memoryp2.sample_critic(batch_size)
-
         for j in range(params.iters):
+            batch1 = memoryp1.sample_critic(batch_size)
+            batch2 = memoryp2.sample_critic(batch_size)
             training_step_critic_selfplay(batch1, batch2, critic, optimizer_critic, episode)
 
         # clear memory after training
@@ -275,10 +292,15 @@ for i in t:
     # copy player1 to player2
     if i % params.copy_player_freq == 0:
         t.set_description(f"New player...  ")
-        player2.set_weights(player1.get_weights())
+        # CHECK who is better
+        if avgp1 > avgp2:
+            player2.set_weights(player1.get_weights())
+        else:
+            player1.set_weights(player2.get_weights())
+        
         # clear memory
-        # memoryp1.reset()
-        # memoryp2.reset()
+        memoryp1.reset()
+        memoryp2.reset()
 
     # copy player1 to historic_player
     if i % params.update_historic_freq == 0:
@@ -296,87 +318,87 @@ for i in t:
 
 
     # eval
-    if i % params.eval_freq == 0 and i > 0:
-        t.set_description(f"Evaluating ")
-        EVAL_EPISODES = 50
+    # if i % params.eval_freq == 0 and i > 0:
+    #     t.set_description(f"Evaluating ")
+    #     EVAL_EPISODES = 50
 
-        history_random = []
-        history_historic = []
-        history_self = []
+    #     history_random = []
+    #     history_historic = []
+    #     history_self = []
         
-        # play aginst random
-        for j in range(EVAL_EPISODES):
-            state, mask = reset_env()
+    #     # play aginst random
+    #     for j in range(EVAL_EPISODES):
+    #         state, mask = reset_env()
             
-            output = evaluate_selfplay(
-                state,
-                mask, 
-                lambda obs: player1(obs, training=False), # type: ignore 
-                lambda obs: np.random.uniform(size=(1, 7)), # type: ignore 
-                critic,
-                tf_env_step, # type: ignore
-                action_space,
-                max_steps_per_episode,
-            ) # type: ignore
+    #         output = evaluate_selfplay(
+    #             state,
+    #             mask, 
+    #             lambda obs: player1(obs, training=False), # type: ignore 
+    #             lambda obs: np.random.uniform(size=(1, 7)), # type: ignore 
+    #             critic,
+    #             tf_env_step, # type: ignore
+    #             action_space,
+    #             max_steps_per_episode,
+    #         ) # type: ignore
 
-            history_random.append(output)
-        t.set_description(f"Evaluating. ")
+    #         history_random.append(output)
+    #     t.set_description(f"Evaluating. ")
 
-        # play aginst historic
-        for j in range(EVAL_EPISODES):
-            state, mask = reset_env()
+    #     # play aginst historic
+    #     for j in range(EVAL_EPISODES):
+    #         state, mask = reset_env()
             
-            output = evaluate_selfplay(
-                state,
-                mask, 
-                lambda obs: player1(obs, training=False), # type: ignore
-                lambda obs: historic_player(obs, training=False), # type: ignore
-                critic,
-                tf_env_step, # type: ignore
-                action_space,
-                max_steps_per_episode,
-            )
+    #         output = evaluate_selfplay(
+    #             state,
+    #             mask, 
+    #             lambda obs: player1(obs, training=False), # type: ignore
+    #             lambda obs: historic_player(obs, training=False), # type: ignore
+    #             critic,
+    #             tf_env_step, # type: ignore
+    #             action_space,
+    #             max_steps_per_episode,
+    #         )
 
-            history_historic.append(output)
-        t.set_description(f"Evaluating.. ")
+    #         history_historic.append(output)
+    #     t.set_description(f"Evaluating.. ")
         
-        # play aginst self
-        for j in range(EVAL_EPISODES):
-            state, mask = reset_env()
+    #     # play aginst self
+    #     for j in range(EVAL_EPISODES):
+    #         state, mask = reset_env()
             
-            output = evaluate_selfplay(
-                state,
-                mask, 
-                lambda obs: player1(obs, training=False), # type: ignore
-                lambda obs: player2(obs, training=False), # type: ignore
-                critic,
-                tf_env_step, # type: ignore
-                action_space,
-                max_steps_per_episode,
-            )
+    #         output = evaluate_selfplay(
+    #             state,
+    #             mask, 
+    #             lambda obs: player1(obs, training=False), # type: ignore
+    #             lambda obs: player2(obs, training=False), # type: ignore
+    #             critic,
+    #             tf_env_step, # type: ignore
+    #             action_space,
+    #             max_steps_per_episode,
+    #         )
 
-            history_self.append(output)
-        t.set_description(f"Evaluating... ")
-        # history is tupe - win side, length
+    #         history_self.append(output)
+    #     t.set_description(f"Evaluating... ")
+    #     # history is tupe - win side, length
 
-        # print some basic info - win rate, avg length ect 
-        random_wins = sum([x[0] for x in history_random])
-        historic_wins = sum([x[0] for x in history_historic])
-        self_wins = sum([x[0] for x in history_self])
+    #     # print some basic info - win rate, avg length ect 
+    #     random_wins = sum([x[0] for x in history_random])
+    #     historic_wins = sum([x[0] for x in history_historic])
+    #     self_wins = sum([x[0] for x in history_self])
 
-        # normalize by number of episodes
-        random_wins = random_wins/EVAL_EPISODES
-        historic_wins = historic_wins/EVAL_EPISODES
-        self_wins = self_wins/EVAL_EPISODES
+    #     # normalize by number of episodes
+    #     random_wins = random_wins/EVAL_EPISODES
+    #     historic_wins = historic_wins/EVAL_EPISODES
+    #     self_wins = self_wins/EVAL_EPISODES
 
-        random_avg_length = sum([x[1] for x in history_random])/len(history_random)
-        historic_avg_length = sum([x[1] for x in history_historic])/len(history_historic)
-        self_avg_length = sum([x[1] for x in history_self])/len(history_self)
+    #     random_avg_length = sum([x[1] for x in history_random])/len(history_random)
+    #     historic_avg_length = sum([x[1] for x in history_historic])/len(history_historic)
+    #     self_avg_length = sum([x[1] for x in history_self])/len(history_self)
 
-        tf.summary.scalar('eval_random_wins', random_wins, step=i)
-        tf.summary.scalar('eval_historic_wins', historic_wins, step=i)
-        tf.summary.scalar('eval_self_wins', self_wins, step=i)
+    #     tf.summary.scalar('eval_random_wins', random_wins, step=i)
+    #     tf.summary.scalar('eval_historic_wins', historic_wins, step=i)
+    #     tf.summary.scalar('eval_self_wins', self_wins, step=i)
 
-        tf.summary.scalar('eval_random_avg_length', random_avg_length, step=i)
-        tf.summary.scalar('eval_historic_avg_length', historic_avg_length, step=i)
-        tf.summary.scalar('eval_self_avg_length', self_avg_length, step=i)
+    #     tf.summary.scalar('eval_random_avg_length', random_avg_length, step=i)
+    #     tf.summary.scalar('eval_historic_avg_length', historic_avg_length, step=i)
+    #     tf.summary.scalar('eval_self_avg_length', self_avg_length, step=i)
