@@ -73,7 +73,10 @@ while True:
         print("optimal ratio: ", optimal_ratio/total)
         
         # step the environment
-        env.step(argmax)
+        if np.random.rand() < 0.1:
+            env.step(action)
+        else:
+            env.step(argmax)
 
     
 

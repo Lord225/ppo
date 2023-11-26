@@ -275,7 +275,7 @@ def evaluate_selfplay(
         masked_action_logits_t = tf.where(tf.cast(mask, tf.bool), action_logits_t, -1e9)
 
         # epsilon greedy
-        action = tf.cast(tf.squeeze(tf.argmax(masked_action_logits_t, axis=1)), tf.int32), # type: ignore
+        action = int(tf.cast(tf.squeeze(tf.argmax(masked_action_logits_t, axis=1)), tf.int32)) # type: ignore
 
         next_state, action_mask, reward, done = tf_env_step(action, next_iteration_is_done) # type: ignore
 
