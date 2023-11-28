@@ -7,7 +7,7 @@ from pettingzoo.classic import connect_four_v3
 import tensorflow as tf
 import tqdm
 
-from algorithms.proximal_policy_optimalization import training_step_critic_selfplay, training_step_ppo_selfplay
+from algorithms.proximal_policy_optimalization import training_step_critic, training_step_critic_selfplay, training_step_ppo_selfplay
 from common import splash_screen
 from exp_collectors.play import evaluate_selfplay, run_episode_selfplay
 from memory import PPOReplayMemory
@@ -25,31 +25,31 @@ args = parser.parse_args()
 params = argparse.Namespace()
 
 params.env_name = "connect_four_v3"
-params.version = "v4.0"
+params.version = "v5.0"
 params.DRY_RUN = False
 
-params.actor_lr  = 1e-6
+params.actor_lr  = 1e-7
 params.critic_lr = 1e-5
 
 params.action_space = 7
 params.observation_space = (6, 7, 2)
 
-params.episodes = 100_000
+params.episodes = 5_000_000
 params.max_steps_per_episode = 100
 
-params.discount_rate = 0.99
+params.discount_rate = 0.98
 params.eps_decay_len = 5000
 params.eps_min = 0.1
 
 params.clip_ratio = 0.20
-params.lam = 0.97
+params.lam = 0.95
 
 params.batch_size = 2000
 
-params.train_interval = 10
-params.iters = 1
+params.train_interval = 1
+params.iters = 80
 
-params.save_freq = 1000
+params.save_freq = 3000
 params.eval_freq = 1000
 params.copy_player_freq = 1000
 params.update_historic_freq = 5000
@@ -74,6 +74,9 @@ def step(action, action_none):
     # add player to state
     state = np.append(state, np.full((6, 7, 1), player), axis=2)
     state = np.array(state, np.float32)
+
+    # default reward for players for playing long
+    reward += -0.025
 
 
     mask = observation["action_mask"] # type: ignore
@@ -124,7 +127,8 @@ player2 = get_model()
 historic_player = get_model()
 historic_player.set_weights(player1.get_weights())
 
-critic = get_critic()
+critic1 = get_critic()
+critic2 = get_critic()
 
 
 # try running an episode
@@ -137,7 +141,8 @@ critic = get_critic()
 
 optimizer1 = tf.keras.optimizers.Adam(learning_rate=params.actor_lr)
 optimizer2 = tf.keras.optimizers.Adam(learning_rate=params.actor_lr)
-optimizer_critic = tf.keras.optimizers.Adam(learning_rate=params.critic_lr)
+optimizer_critic1 = tf.keras.optimizers.Adam(learning_rate=params.critic_lr)
+optimizer_critic2 = tf.keras.optimizers.Adam(learning_rate=params.critic_lr)
 
 memoryp1 = PPOReplayMemory(10_000, (6, 7, 3)) # exp as p1
 memoryp2 = PPOReplayMemory(10_000, (6, 7, 3)) # exp as p2
@@ -146,6 +151,9 @@ t = tqdm.tqdm(range(params.episodes))
 
 training_step_ppo_selfplay_p1 = tf.function(training_step_ppo_selfplay)
 training_step_ppo_selfplay_p2 = tf.function(training_step_ppo_selfplay)
+
+training_step_critic1 = tf.function(training_step_critic_selfplay)
+training_step_critic2 = tf.function(training_step_critic_selfplay)
 
 def log_stats(stats, step):
     # list of kl, policy_loss, mean_ratio, mean_clipped_ratio, mean_advantage, mean_logprob
@@ -193,11 +201,11 @@ for i in t:
 
     if np.random.uniform() < 0.5:
         # run with self as p1
-        output = run_episode_selfplay(state, mask, player1, player2, critic, tf_env_step, max_steps_per_episode, action_space, epsilon) # type: ignore
+        output = run_episode_selfplay(state, mask, player1, player2, critic1, critic2, tf_env_step, max_steps_per_episode, action_space, epsilon) # type: ignore
         P1 = True
     else: 
         # run with self as p2
-        output = run_episode_selfplay(state, mask, player2, player1, critic, tf_env_step, max_steps_per_episode, action_space, epsilon) # type: ignore
+        output = run_episode_selfplay(state, mask, player2, player1, critic1, critic2, tf_env_step, max_steps_per_episode, action_space, epsilon) # type: ignore
         P1 = False
     
     (states_p1, states_p2, actions_p1, actions_p2, rewards_p1, rewards_p2, values_p1, values_p2, log_probs_p1, log_probs_p2) = output # type: ignore
@@ -251,11 +259,11 @@ for i in t:
 
         for j in range(params.iters):
             batch1 = memoryp1.sample(batch_size)
-            batch2 = memoryp1.sample(batch_size)
+            #batch2 = memoryp1.sample(batch_size)
 
             history = training_step_ppo_selfplay_p1(
                 batch1,
-                batch2,
+               # batch2,
                 player1,
                 action_space,
                 clip_ratio,
@@ -265,11 +273,11 @@ for i in t:
             stats.append(history)
             
             batch1 = memoryp2.sample(batch_size)
-            batch2 = memoryp2.sample(batch_size)
+            #batch2 = memoryp2.sample(batch_size)
 
             history = training_step_ppo_selfplay_p2(
                 batch1,
-                batch2,
+              #  batch2,
                 player2,
                 action_space,
                 clip_ratio,
@@ -280,14 +288,24 @@ for i in t:
 
         log_stats(stats, episode)
 
-        for j in range(params.iters):
-            batch1 = memoryp1.sample_critic(batch_size)
-            batch2 = memoryp2.sample_critic(batch_size)
-            training_step_critic_selfplay(batch1, batch2, critic, optimizer_critic, episode)
+        stats = []
 
+        for j in range(params.iters):
+            # batch1 = memoryp1.sample_critic(batch_size)
+            # batch2 = memoryp2.sample_critic(batch_size)
+            # training_step_critic_selfplay(batch1, batch2, critic, optimizer_critic, episode)
+
+            batch1 = memoryp1.sample_critic(batch_size)
+            h = training_step_critic1(batch1, critic1, optimizer_critic1, episode)
+            stats.append(h)
+            batch2 = memoryp2.sample_critic(batch_size)
+            h = training_step_critic2(batch2, critic2, optimizer_critic2, episode)
+            stats.append(h)
+
+        tf.summary.scalar('critic_loss', np.mean(stats), step=i)
         # clear memory after training
-        # memoryp1.reset()
-        # memoryp2.reset()
+        memoryp1.reset()
+        memoryp2.reset()
 
     # copy player1 to player2
     if i % params.copy_player_freq == 0:
@@ -295,12 +313,14 @@ for i in t:
         # CHECK who is better
         if avgp1 > avgp2:
             player2.set_weights(player1.get_weights())
+            critic2.set_weights(critic1.get_weights())
         else:
             player1.set_weights(player2.get_weights())
+            critic1.set_weights(critic2.get_weights())
         
         # clear memory
-        memoryp1.reset()
-        memoryp2.reset()
+        # memoryp1.reset()
+        # memoryp2.reset()
 
     # copy player1 to historic_player
     if i % params.update_historic_freq == 0:
