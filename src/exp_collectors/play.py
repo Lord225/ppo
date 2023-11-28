@@ -136,7 +136,8 @@ def run_episode_selfplay(
     mask,
     player1: tf.keras.Model,
     player2: tf.keras.Model,
-    critic: tf.keras.Model,
+    critic1: tf.keras.Model,
+    critic2: tf.keras.Model,
     tf_env_step: Callable[[tf.Tensor, tf.Tensor], Tuple[tf.Tensor, tf.Tensor, tf.Tensor, tf.Tensor]],
     max_steps: int,
     env_actions: int,
@@ -173,10 +174,11 @@ def run_episode_selfplay(
         # Run the model and to get action probabilities and critic value
         if current_player == 0:
             action_logits_t = player1(state)
+            value_t = critic1(state)
         else:
             action_logits_t = player2(state)
+            value_t = critic2(state)
 
-        value_t = critic(state)
 
         masked_action_logits_t = tf.where(tf.cast(mask, tf.bool), action_logits_t, -1e9)
         masked_action_random = tf.where(tf.cast(mask, tf.bool), tf.random.uniform([1, env_actions]), -1e9)
