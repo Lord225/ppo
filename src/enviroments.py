@@ -77,6 +77,7 @@ def make_tensorflow_env_step(env: gym.Env, observation_transformer: ObservationT
     def tf_env_step(action):
         return tf.numpy_function(step, [action], (tf.float32, tf.float32, tf.int32))
     return tf_env_step # type: ignore
+    
 
 def make_tensorflow_env_reset(env: gym.Env, observation_transformer: ObservationTransformer) -> Callable[[], tf.Tensor]:
     def reset():
