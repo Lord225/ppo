@@ -17,7 +17,15 @@ class PPOReplayHistoryType(NamedTuple):
     advantages: tf.Tensor
     returns: tf.Tensor
     logprobability: tf.Tensor
-    
+
+class PPOReplayHistoryCuriosityType(NamedTuple):
+    states: tf.Tensor
+    actions: tf.Tensor
+    advantages: tf.Tensor
+    returns: tf.Tensor
+    logprobability: tf.Tensor
+    next_states: tf.Tensor
+
 class HistorySampleType(NamedTuple):
     states: tf.Tensor
     actions: tf.Tensor
@@ -27,6 +35,11 @@ class HistorySampleType(NamedTuple):
 class HistorySampleCriticType(NamedTuple):
     states: tf.Tensor
     returns: tf.Tensor
+
+class HistorySampleCuriosityType(NamedTuple):
+    states: tf.Tensor
+    actions: tf.Tensor
+    next_states: tf.Tensor
 
 class EnvStepReturnType(NamedTuple):
     state: tf.Tensor

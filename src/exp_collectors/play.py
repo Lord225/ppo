@@ -2,7 +2,7 @@ from typing import Callable, Tuple
 import tensorflow as tf
 from algorithms.proximal_policy_optimalization import logprobabilities
 
-from common import PPOReplayHistoryType, ReplayHistoryType
+from common import PPOReplayHistoryCuriosityType, PPOReplayHistoryType, ReplayHistoryType
 
 
 def get_episode_runner(tf_env_step: Callable[[tf.Tensor], Tuple[tf.Tensor, tf.Tensor, tf.Tensor]]):
@@ -300,7 +300,7 @@ def evaluate_selfplay(
 
 
 def get_curius_ppo_runner(tf_env_step: Callable[[tf.Tensor], Tuple[tf.Tensor, tf.Tensor, tf.Tensor]]):
-    @tf.function(reduce_retracing=True)
+    #@tf.function(reduce_retracing=True)
     def run_episode(
             initial_state: tf.Tensor,
             actor: tf.keras.Model,
@@ -340,10 +340,13 @@ def get_curius_ppo_runner(tf_env_step: Callable[[tf.Tensor], Tuple[tf.Tensor, tf
 
             next_state.set_shape(initial_state_shape)
             
+            action_one_hot = tf.one_hot(action, env_actions)
+            action_input_processed = tf.expand_dims(action_one_hot, axis=0)
             # calculate curiosity
-            curiosity_reward = curiosity(state, action)
-            curiosity_reward = tf.squeeze(curiosity_reward)
-            curiosity_reward = tf.cast(curiosity_reward, tf.float32)
+            predicted_state = curiosity([state, action_input_processed]) # type: ignore
+            predicted_state = tf.squeeze(predicted_state, axis=0)
+            predicted_state.set_shape(initial_state_shape) # type: ignore
+            curiosity_reward = tf.reduce_sum(tf.square(predicted_state - next_state)) # type: ignore
 
             reward = reward + curius_coef * curiosity_reward # type: ignore
             
@@ -351,8 +354,8 @@ def get_curius_ppo_runner(tf_env_step: Callable[[tf.Tensor], Tuple[tf.Tensor, tf
             
             # store results
             curiosities = curiosities.write(t, curiosity_reward)
-            states = states.write(t, state)
-            next_states = next_states.write(t, next_state)
+            states = states.write(t,  tf.squeeze(state))
+            next_states = next_states.write(t, tf.squeeze(next_state))
             actions = actions.write(t, action)
             rewards = rewards.write(t, reward)
             values = values.write(t, tf.squeeze(value_t))
@@ -369,8 +372,9 @@ def get_curius_ppo_runner(tf_env_step: Callable[[tf.Tensor], Tuple[tf.Tensor, tf
         values = values.stack()
         log_probs = log_probs.stack()
         next_states = next_states.stack()
+        curiosities = curiosities.stack()
 
-        return PPOReplayHistoryType(states, actions, rewards, values, log_probs), tf.reduce_sum(rewards), tf.reduce_sum(curiosities)
+        return PPOReplayHistoryCuriosityType(states, actions, rewards, values, log_probs, next_states), tf.reduce_sum(rewards), tf.reduce_mean(curiosities),  tf.math.reduce_std(curiosities)
                 
     return run_episode
 
