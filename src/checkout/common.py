@@ -4,7 +4,7 @@ from tqdm import tqdm
 import numpy as np
 import matplotlib.pyplot as plt
 
-def run_episode(env, agent, observation_preprocess, save_all: bool = False):
+def run_episode(env, agent, observation_preprocess, save_all: bool = False, curiosity = None):
     history_rewards = []
     history = []
 
@@ -15,6 +15,7 @@ def run_episode(env, agent, observation_preprocess, save_all: bool = False):
 
             rewards = []
             history_episode = []
+            i = 0
 
             while True:
                 # check how obs looks like (two images)
@@ -22,8 +23,8 @@ def run_episode(env, agent, observation_preprocess, save_all: bool = False):
                 # ax[0].imshow(state[:,:, 0])
                 # ax[1].imshow(state[:,:, 1])
                 # plt.show()
-
-                
+                print(i)
+                i += 1
                 state = tf.expand_dims(state, 0)
                 action_logits_t = agent(state)
 
@@ -31,9 +32,17 @@ def run_episode(env, agent, observation_preprocess, save_all: bool = False):
                 action = tf.cast(action, tf.int32)
                 action = tf.squeeze(action)
 
-                state, reward, done, _, _ = env.step(int(action))
+                new_state, reward, done, _, _ = env.step(int(action))
 
-                state = observation_preprocess(state)
+                if curiosity is not None:
+                    action_one_hot = tf.one_hot(action, env.action_space.n)
+                    action_one_hot = tf.expand_dims(action_one_hot, 0)
+                    predicted_state = curiosity([state, action_one_hot])
+
+                    plt.imshow(predicted_state[0,:,:,5])
+                    plt.show()
+
+                state = observation_preprocess(new_state)
 
                 history_episode.append((state, action, reward, done))
             

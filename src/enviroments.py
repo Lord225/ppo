@@ -57,7 +57,7 @@ def pacman_transform_grayscale_observation_stack_big(observation):
     observation = np.reshape(observation, (observation.shape[0], observation.shape[1], -1))
     observation = cv2.resize(observation,  (50, 105), interpolation=cv2.INTER_NEAREST)
     observation = observation[:85, :, :] # shape (85, 50, 6)
-    return observation.astype(np.float32)/255
+    return observation.astype(np.float32)/255 # type: ignore
     
 def get_pole(human: bool = False):
     return gym.make("CartPole-v1", render_mode="human" if human else "rgb_array")

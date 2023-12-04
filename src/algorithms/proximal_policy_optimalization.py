@@ -175,12 +175,15 @@ def training_step_curiosty(
         batch,
         curiosity,
         optimizer: tf.keras.optimizers.Optimizer,
+        num_of_actions,
         step: int
 ):
     observation_buffer, action_buffer, next_observation_buffer = batch
 
+    action_buffer = tf.one_hot(action_buffer, num_of_actions, dtype=tf.float32)
+
     with tf.GradientTape() as tape:
-        loss = tf.reduce_mean(tf.square(next_observation_buffer - curiosity(observation_buffer, action_buffer)))
+        loss = tf.reduce_mean(tf.square(next_observation_buffer - curiosity([observation_buffer, action_buffer])))
 
     gradients = tape.gradient(loss, curiosity.trainable_variables)
     optimizer.apply_gradients(zip(gradients, curiosity.trainable_variables))
