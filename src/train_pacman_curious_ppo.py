@@ -1,4 +1,5 @@
 from collections import deque
+import gymnasium
 import tensorflow as tf
 import tensorboard
 import os
@@ -46,7 +47,7 @@ params.lam = 0.98
 
 
 # params.curius_coef = 0.013
-params.curius_coef = 0.08
+params.curius_coef = 0.04
 
 params.batch_size = 4000
 params.batch_size_curius = 300
@@ -55,7 +56,7 @@ params.train_interval = 1
 params.iters = 100
 
 
-params.save_freq = 500
+params.save_freq = 1000
 if args.resume is not None:
     params.resumed = 'resumed from: ' + os.path.basename(args.resume)
 
@@ -154,7 +155,16 @@ def log_stats(stats, step):
     tf.summary.scalar('mean_clipped_ratio', np.mean([x[3] for x in stats]), step=step)
     tf.summary.scalar('mean_logprob', np.mean([x[5] for x in stats]), step=step)
 
-
+class RewardWrapper(gymnasium.RewardWrapper):
+    def reward(self, reward):
+        if float(reward) >= 200.0:
+            return 100.0
+    
+        return reward
+        
+    
+env = RewardWrapper(env) # type: ignore
+    
 def run():
     running_avg = deque(maxlen=200)
 
