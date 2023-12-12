@@ -189,3 +189,23 @@ def training_step_curiosty(
     optimizer.apply_gradients(zip(gradients, curiosity.trainable_variables))
 
     tf.summary.scalar('curiosity_loss', loss, step=step) # type: ignore
+
+@tf.function
+def training_step_autoencoder(
+    batch,
+    autoencoder,
+    optimizer: tf.keras.optimizers.Optimizer,
+    step: int
+):
+    observation_buffer = batch
+
+    # train autoencoder
+
+    with tf.GradientTape() as tape:
+        loss = tf.reduce_mean(tf.square(observation_buffer - autoencoder(observation_buffer)))
+
+    gradients = tape.gradient(loss, autoencoder.trainable_variables)
+    optimizer.apply_gradients(zip(gradients, autoencoder.trainable_variables))
+
+    tf.summary.scalar('autoencoder_loss', loss, step=step) # type: ignore
+
