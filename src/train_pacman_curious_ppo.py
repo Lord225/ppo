@@ -170,8 +170,8 @@ def run():
 
     memory = PPOReplayMemory(15_000, params.observation_space, gamma=params.discount_rate, lam=params.lam, gather_next_states=True)
 
-    env_step = enviroments.make_tensorflow_env_step(env, lambda x: enviroments.pacman_transform_grayscale_observation_stack_big(x))
-    env_reset = enviroments.make_tensorflow_env_reset(env, lambda x: enviroments.pacman_transform_grayscale_observation_stack_big(x))
+    env_step = enviroments.make_tensorflow_env_step(env, lambda x: enviroments.pacman_transform_grayscale_observation_stack_big(x)) # type: ignore
+    env_reset = enviroments.make_tensorflow_env_reset(env, lambda x: enviroments.pacman_transform_grayscale_observation_stack_big(x)) # type: ignore
 
     runner = get_curius_ppo_runner(env_step)
     runner = tf.function(runner)
