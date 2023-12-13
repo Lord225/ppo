@@ -7,7 +7,7 @@ from pettingzoo.classic import connect_four_v3
 import tensorflow as tf
 import tqdm
 
-from algorithms.proximal_policy_optimalization import training_step_critic, training_step_critic_selfplay, training_step_ppo_selfplay
+from algorithms.proximal_policy_optimalization import training_step_critic_selfplay, training_step_ppo_selfplay
 from common import splash_screen
 from exp_collectors.play import evaluate_selfplay, run_episode_selfplay
 from memory import PPOReplayMemory
