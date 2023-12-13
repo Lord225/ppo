@@ -60,8 +60,11 @@ def discounted_cumulative_sums_tf(x, discount_rate)-> tf.Tensor:
     return tf.reverse(buffer.stack(), axis=[0]) # type: ignore
 
 class PPOReplayMemory:
-    def __init__(self, max_size, state_shape, gamma=0.99, lam=0.95, gather_next_states=False):
+    def __init__(self, max_size, state_shape, next_state_shape=None, gamma=0.99, lam=0.95, gather_next_states=False):
         states_shape = (max_size,) + state_shape
+        if next_state_shape is None:
+            next_state_shape = states_shape
+        
         self.states_buffer = tf.Variable(tf.zeros(states_shape,  dtype=tf.float32), trainable=False, dtype=tf.float32)
         self.advantages_buffer = tf.Variable(tf.zeros((max_size),  dtype=tf.float32), trainable=False, dtype=tf.float32)
         self.actions_buffer = tf.Variable(tf.zeros((max_size), dtype=tf.int32), trainable=False, dtype=tf.int32)
@@ -70,7 +73,7 @@ class PPOReplayMemory:
         self.logprobability_buffer = tf.Variable(tf.zeros((max_size),  dtype=tf.float32), trainable=False, dtype=tf.float32)
 
         if gather_next_states:
-            self.next_states_buffer = tf.Variable(tf.zeros(states_shape, dtype=tf.float32), trainable=False, dtype=tf.float32)
+            self.next_states_buffer = tf.Variable(tf.zeros(next_state_shape, dtype=tf.float32), trainable=False, dtype=tf.float32)
         else:
             self.next_states_buffer = None
 
@@ -195,6 +198,25 @@ class PPOReplayMemory:
             tf.gather(self.actions_buffer, indices),
             tf.gather(self.next_states_buffer, indices),
         )
+    
+    def sample_encoded_curiosity(self, batch_size, encoder):
+        assert self.real_size >= batch_size, "buffer contains less samples than batch size"
+        assert self.next_states_buffer is not None, "next_states_buffer is not gathered"
+
+        indices = tf.random.uniform((batch_size,), 0, self.real_size, dtype=tf.int32)
+
+        return HistorySampleCuriosityType(
+            encoder(tf.gather(self.states_buffer, indices)),
+            tf.gather(self.actions_buffer, indices),
+            encoder(tf.gather(self.next_states_buffer, indices)),
+        )
+
+    def sample_autoencoder(self, batch_size):
+        assert self.real_size >= batch_size, "buffer contains less samples than batch size"
+
+        indices = tf.random.uniform((batch_size,), 0, self.real_size, dtype=tf.int32)
+
+        return tf.gather(self.states_buffer, indices)
          
     def __len__(self) -> int:
         return self.real_size

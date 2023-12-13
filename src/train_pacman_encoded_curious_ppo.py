@@ -5,7 +5,7 @@ import tensorboard
 import os
 import argparse
 import tqdm
-from algorithms.proximal_policy_optimalization import training_step_critic, training_step_curiosty, training_step_ppo
+from algorithms.proximal_policy_optimalization import training_step_autoencoder, training_step_critic, training_step_curiosty, training_step_ppo
 from common import splash_screen
 import config
 import enviroments
@@ -24,15 +24,16 @@ env = enviroments.get_pacman_stack_frames_big()
 params = argparse.Namespace()
 
 params.env_name = env.spec.id
-params.version = "v5.0"
+params.version = "v6.1"
 params.DRY_RUN = False
 
-params.actor_lr  = 1e-6
-params.critic_lr = 1e-4
+params.actor_lr  = 1e-5
+params.critic_lr = 3e-4
 
 params.action_space = env.action_space.n # type: ignore
 params.observation_space_raw = env.observation_space.shape
 params.observation_space = (85, 50, 6)
+params.encoding_size = 128
 
 params.episodes = 100000
 params.max_steps_per_episode = 1200
@@ -47,14 +48,14 @@ params.lam = 0.98
 
 
 # params.curius_coef = 0.013
-params.curius_coef = 0.04
+params.curius_coef = 2.0
 
-params.batch_size = 4000
+params.batch_size = 4096
 params.batch_size_curius = 300
 
 params.train_interval = 1
-params.iters = 100
-
+params.iters = 1
+params.iters_courious = 10
 
 params.save_freq = 1000
 if args.resume is not None:
@@ -101,51 +102,76 @@ def get_critic():
     value = tf.squeeze(tf.keras.layers.Dense(1)(x))
     return tf.keras.Model(inputs=observation_input, outputs=value)
 
+def get_curiosity_autoencoder():
+    if args.resume is not None:
+        autoencoder = tf.keras.models.load_model(args.resume+'.autoencoder.h5')
+        encoder = tf.keras.Model(inputs=autoencoder.input, outputs=autoencoder.get_layer('encoder').output) # type: ignore
+        print("loaded model from", args.resume)
+        return encoder, autoencoder
+    
+
+    observation_input = tf.keras.Input(shape=params.observation_space, dtype=tf.float32)
+    x = tf.keras.layers.Conv2D(32, 3, strides=2, activation=tf.nn.elu)(observation_input)
+    x = tf.keras.layers.Conv2D(64, 3, strides=2, activation=tf.nn.elu)(x)
+    x = tf.keras.layers.Conv2D(64, 3, strides=2, activation=tf.nn.elu)(x)
+    x = tf.keras.layers.Conv2D(64, 3, strides=2, activation=tf.nn.elu)(x)
+    x = tf.keras.layers.Flatten()(x)
+    x = tf.keras.layers.Dense(128, activation=tf.nn.elu)(x)
+    
+    encoded = tf.keras.layers.Dense(params.encoding_size, activation=tf.nn.tanh, name='encoder')(x)
+
+    x = tf.keras.layers.Dense(128, activation=tf.nn.elu)(encoded)
+    x = tf.keras.layers.Dense(64, activation=tf.nn.elu)(x)
+    x = tf.keras.layers.Reshape((1, 1, 64))(x)
+    x = tf.keras.layers.Conv2DTranspose(64, 3, strides=2, activation=tf.nn.elu)(x)
+    x = tf.keras.layers.Conv2DTranspose(32, 3, strides=2, activation=tf.nn.elu)(x)
+    x = tf.keras.layers.Conv2DTranspose(32, 3, strides=2, activation=tf.nn.elu)(x) 
+    x = tf.keras.layers.Conv2DTranspose(16, 3, strides=2, activation=tf.nn.elu)(x) # 31, 31, 32
+    x = tf.keras.layers.Conv2DTranspose(16, 3, strides=2, activation=tf.nn.elu)(x) # 63, 63, 6
+    x = tf.keras.layers.Conv2DTranspose(16, 3, strides=2, activation=tf.nn.elu)(x) # 127, 127, 6
+    x = tf.keras.layers.Cropping2D(((21, 21), (39, 38)))(x)
+    x = tf.keras.layers.Conv2D(16, 3, strides=1, padding='same', activation=tf.nn.elu)(x)
+    x = tf.keras.layers.Conv2D(8, 3, strides=1, padding='same', activation=tf.nn.elu)(x)
+    x = tf.keras.layers.Conv2D(6, 3, strides=1, padding='same', activation=tf.nn.elu)(x)
+
+    encoder_model = tf.keras.Model(inputs=observation_input, outputs=encoded)
+    autoencoder_model = tf.keras.Model(inputs=observation_input, outputs=x)
+
+    autoencoder_model.summary()
+
+    return encoder_model, autoencoder_model
+
 def get_curiosity():
     if args.resume is not None:
         model = tf.keras.models.load_model(args.resume+'.curiosity.h5')
         print("loaded model from", args.resume)
         return model
     
-    observation_input = tf.keras.Input(shape=params.observation_space, dtype=tf.float32)
+    observation_input = tf.keras.Input(shape=params.encoding_size, dtype=tf.float32)
     action_input = tf.keras.Input(shape=params.action_space, dtype=tf.float32)
 
-    # convoluted nn that will predict next state
-    x = tf.keras.layers.Conv2D(32, 3, strides=2, activation=tf.nn.elu)(observation_input)
-    x = tf.keras.layers.Conv2D(64, 3, strides=2, activation=tf.nn.elu)(x)
-    x = tf.keras.layers.Conv2D(64, 3, strides=2, activation=tf.nn.elu)(x)
-    x = tf.keras.layers.Conv2D(128, 3, strides=3, activation=tf.nn.elu)(x)
-    x = tf.keras.layers.Flatten()(x)
-    x = tf.keras.layers.Concatenate()([x, action_input])
-    x = tf.keras.layers.Dense(512, activation=tf.nn.elu)(x)
-    x = tf.keras.layers.Reshape((1, 1, 512))(x)
-    x = tf.keras.layers.Conv2DTranspose(128, 3, strides=2, activation=tf.nn.elu)(x)
-    x = tf.keras.layers.Conv2DTranspose(64, 3, strides=2, activation=tf.nn.elu)(x)
-    x = tf.keras.layers.Conv2DTranspose(64, 3, strides=2, activation=tf.nn.elu)(x) 
-    x = tf.keras.layers.Conv2DTranspose(64, 3, strides=2, activation=tf.nn.elu)(x) # 31, 31, 32
-    x = tf.keras.layers.Conv2DTranspose(64, 3, strides=2, activation=tf.nn.elu)(x) # 63, 63, 6
-    x = tf.keras.layers.Conv2DTranspose(32, 3, strides=2, activation=tf.nn.elu)(x) # 127, 127, 6
-    x = tf.keras.layers.Cropping2D(((21, 21), (39, 38)))(x)
-    # concat with observation
-    x = tf.keras.layers.Concatenate()([x, observation_input])
-    x = tf.keras.layers.Conv2D(32, 3, strides=1, activation=tf.nn.elu)(x)
-    x = tf.keras.layers.Conv2D(16, 3, strides=1, activation=tf.nn.elu)(x)
-    x = tf.keras.layers.Conv2D(6, 3, strides=1, activation=tf.nn.elu)(x)
+    x = tf.keras.layers.Concatenate()([observation_input, action_input]) # 128 + 10
+    x = tf.keras.layers.Dense(128, activation=tf.nn.elu)(x)
+    x = tf.keras.layers.Dense(256, activation=tf.nn.elu)(x)
+    x = tf.keras.layers.Dense(128, activation=tf.nn.elu)(x)
+    x = tf.keras.layers.Dense(params.encoding_size, activation=tf.nn.tanh)(x)
 
     return tf.keras.Model(inputs=[observation_input, action_input], outputs=x)
-
+    
 
 actor = get_actor()
 critic = get_critic()
 curiosity = get_curiosity()
+encoder, autoencoder = get_curiosity_autoencoder()
 
 
 policy_optimizer = tf.keras.optimizers.Adam(learning_rate=params.actor_lr)
 value_optimizer = tf.keras.optimizers.Adam(learning_rate=params.critic_lr)
 curiosity_optimizer = tf.keras.optimizers.Adam(learning_rate=params.critic_lr)
+autoencoder_optimizer = tf.keras.optimizers.Adam(learning_rate=params.critic_lr)
 
 from memory import PPOReplayMemory
-from exp_collectors.play import get_curius_ppo_runner
+from exp_collectors.play import get_curius_ppo_runner_2
 
 def log_stats(stats, step):
     # list of kl, policy_loss, mean_ratio, mean_clipped_ratio, mean_advantage, mean_logprob
@@ -168,12 +194,12 @@ env = RewardWrapper(env) # type: ignore
 def run():
     running_avg = deque(maxlen=200)
 
-    memory = PPOReplayMemory(15_000, params.observation_space, gamma=params.discount_rate, lam=params.lam, gather_next_states=True)
+    memory = PPOReplayMemory(10_000, params.observation_space, gamma=params.discount_rate, lam=params.lam, gather_next_states=True)
 
     env_step = enviroments.make_tensorflow_env_step(env, lambda x: enviroments.pacman_transform_grayscale_observation_stack_big(x)) # type: ignore
     env_reset = enviroments.make_tensorflow_env_reset(env, lambda x: enviroments.pacman_transform_grayscale_observation_stack_big(x)) # type: ignore
 
-    runner = get_curius_ppo_runner(env_step)
+    runner = get_curius_ppo_runner_2(env_step)
     runner = tf.function(runner)
 
     action_space = tf.constant(params.action_space, dtype=tf.int32)
@@ -193,7 +219,7 @@ def run():
         
         curius_coef = tf.constant(params.curius_coef, dtype=tf.float32)
 
-        (states, actions, rewards, values, log_probs, next_states), total_rewards, curiosity_mean, curiosity_std = runner(initial_state, actor, critic, curiosity, max_steps_per_episode, action_space, curius_coef) # type: ignore
+        (states, actions, rewards, values, log_probs, next_states), total_rewards, curiosity_mean, curiosity_std = runner(initial_state, actor, critic, curiosity, encoder, max_steps_per_episode, action_space, curius_coef) # type: ignore
         
         memory.add(states, actions, rewards, values, log_probs, next_states)
         
@@ -213,7 +239,7 @@ def run():
 
         episode = tf.constant(episode, dtype=tf.int64)
 
-        if len(memory) >= 15_000 and int(episode) % params.train_interval == 0:
+        if len(memory) >= batch_size and int(episode) % params.train_interval == 0:
             stats = [] # kl, policy_loss, mean_ratio, mean_clipped_ratio, mean_advantage, mean_logprob
             for _ in range(params.iters):
                 batch = memory.sample(batch_size)
@@ -226,11 +252,16 @@ def run():
                 batch = memory.sample_critic(batch_size)
                 training_step_critic(batch, critic, value_optimizer, episode)
 
-            for _ in range(params.iters):
-                batch = memory.sample_curiosity(batch_size_curius)
+            for _ in range(params.iters_courious):
+                batch = memory.sample_encoded_curiosity(batch_size_curius, encoder)
                 training_step_curiosty(batch, curiosity, curiosity_optimizer, action_space,  episode)
 
-            memory.reset()
+            for _ in range(params.iters_courious):
+                batch = memory.sample_autoencoder(batch_size_curius)
+                training_step_autoencoder(batch, autoencoder, autoencoder_optimizer, episode)
+
+            # memory.reset()
+
 
 
         if episode % params.save_freq == 0 and episode > 0: 
@@ -239,5 +270,6 @@ def run():
             actor.save(f"{NAME}.actor.h5") # type: ignore
             critic.save(f"{NAME}.critic.h5") # type: ignore
             curiosity.save(f"{NAME}.curiosity.h5") # type: ignore
+            autoencoder.save(f"{NAME}.autoencoder.h5") # type: ignore
 
 run()
