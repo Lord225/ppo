@@ -2,14 +2,27 @@ import tensorflow as tf
 
 from tqdm import tqdm
 import numpy as np
+
 import matplotlib.pyplot as plt
 
-def run_episode(env, agent, observation_preprocess, save_all: bool = False, curiosity = None):
+def run_episode(env, 
+                agent, 
+                observation_preprocess, 
+                save_all: bool = False, 
+                curiosity = None,
+                show_curiosity=True, 
+                render_game=True,
+                limit = None,
+                ):
     history_rewards = []
     history = []
 
-    with tqdm() as t:
-        while True:
+    if curiosity is not None and show_curiosity:
+        fig, ax = plt.subplots(1, 2)
+        plt.show(block=False)
+    
+    with tqdm(None if limit is None else range(limit)) as t:
+        while len(history_rewards) < limit if limit is not None else True:
             state, _ = env.reset()
             state = observation_preprocess(state)
 
@@ -18,12 +31,6 @@ def run_episode(env, agent, observation_preprocess, save_all: bool = False, curi
             i = 0
 
             while True:
-                # check how obs looks like (two images)
-                # fig, ax = plt.subplots(1, 2)
-                # ax[0].imshow(state[:,:, 0])
-                # ax[1].imshow(state[:,:, 1])
-                # plt.show()
-                print(i)
                 i += 1
                 state = tf.expand_dims(state, 0)
                 action_logits_t = agent(state)
@@ -38,20 +45,25 @@ def run_episode(env, agent, observation_preprocess, save_all: bool = False, curi
                     action_one_hot = tf.one_hot(action, env.action_space.n)
                     action_one_hot = tf.expand_dims(action_one_hot, 0)
                     predicted_state = curiosity([state, action_one_hot])
-
-                    plt.imshow(predicted_state[0,:,:,5])
-                    plt.show()
+                    if show_curiosity:
+                        ax[0].imshow(state[0, :, :, 0], vmin=0, vmax=1.0) # type: ignore
+                        ax[1].imshow(predicted_state[0, :, :, 0], vmin=0, vmax=1.0) # type: ignore
+                        plt.draw()
+                        plt.pause(0.001)
+                else:
+                    predicted_state = None
 
                 state = observation_preprocess(new_state)
 
-                history_episode.append((state, action, reward, done))
+                history_episode.append((np.array(state), np.array(action), np.array(reward), np.array(done), np.array(predicted_state)))
             
                 rewards.append(reward)
 
                 if done:
                     break
-
-                env.render()
+                
+                if render_game:
+                    env.render()
 
             history_rewards.append((sum(rewards), len(rewards), np.mean(rewards), np.std(rewards)))
             history.append(history_episode)
@@ -63,13 +75,4 @@ def run_episode(env, agent, observation_preprocess, save_all: bool = False, curi
             t.set_postfix_str(f'{sum(len(x[0]) for x in history_episode)}')
             t.update(1)
 
-
-
-            
-            
-
-            
-
-
-
-
+    return history_rewards, history
