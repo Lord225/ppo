@@ -18,7 +18,6 @@ parser.add_argument("--resume", type=str, default=None, help="resume from a mode
 
 args = parser.parse_args()
 
-
 env = enviroments.get_pacman_stack_frames_big()
 
 params = argparse.Namespace()
@@ -27,8 +26,8 @@ params.env_name = env.spec.id
 params.version = "v6.1"
 params.DRY_RUN = False
 
-params.actor_lr  = 1e-5
-params.critic_lr = 3e-4
+params.actor_lr  = 1e-6
+params.critic_lr = 1e-5
 
 params.action_space = env.action_space.n # type: ignore
 params.observation_space_raw = env.observation_space.shape
@@ -48,14 +47,14 @@ params.lam = 0.98
 
 
 # params.curius_coef = 0.013
-params.curius_coef = 2.0
+params.curius_coef = 0.2
 
 params.batch_size = 4096
 params.batch_size_curius = 300
 
 params.train_interval = 1
-params.iters = 1
-params.iters_courious = 10
+params.iters = 10
+params.iters_courious = 30
 
 params.save_freq = 1000
 if args.resume is not None:
@@ -194,7 +193,7 @@ env = RewardWrapper(env) # type: ignore
 def run():
     running_avg = deque(maxlen=200)
 
-    memory = PPOReplayMemory(10_000, params.observation_space, gamma=params.discount_rate, lam=params.lam, gather_next_states=True)
+    memory = PPOReplayMemory(8_000, params.observation_space, gamma=params.discount_rate, lam=params.lam, gather_next_states=True)
 
     env_step = enviroments.make_tensorflow_env_step(env, lambda x: enviroments.pacman_transform_grayscale_observation_stack_big(x)) # type: ignore
     env_reset = enviroments.make_tensorflow_env_reset(env, lambda x: enviroments.pacman_transform_grayscale_observation_stack_big(x)) # type: ignore

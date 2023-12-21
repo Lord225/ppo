@@ -191,6 +191,34 @@ def training_step_curiosty(
     tf.summary.scalar('curiosity_loss', loss, step=step) # type: ignore
 
 @tf.function
+def training_step_selfplay_curiosty(
+        batch1,
+        batch2,
+        curiosity,
+        optimizer: tf.keras.optimizers.Optimizer,
+        num_of_actions,
+        step: int
+):
+    observation_buffer1, action_buffer1, next_observation_buffer1 = batch1
+    observation_buffer2, action_buffer2, next_observation_buffer2 = batch2
+
+    observation_buffer = tf.concat([observation_buffer1, observation_buffer2], axis=0)
+    action_buffer = tf.concat([action_buffer1, action_buffer2], axis=0)
+    next_observation_buffer = tf.concat([next_observation_buffer1, next_observation_buffer2], axis=0)
+
+    action_buffer = tf.one_hot(action_buffer, num_of_actions, dtype=tf.float32)
+
+    with tf.GradientTape() as tape:
+        loss = tf.reduce_mean(tf.square(next_observation_buffer - curiosity([observation_buffer, action_buffer])))
+
+    gradients = tape.gradient(loss, curiosity.trainable_variables)
+    optimizer.apply_gradients(zip(gradients, curiosity.trainable_variables))
+
+    tf.summary.scalar('curiosity_loss', loss, step=step) # type: ignore
+
+
+
+@tf.function
 def training_step_autoencoder(
     batch,
     autoencoder,

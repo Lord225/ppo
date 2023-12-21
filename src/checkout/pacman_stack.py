@@ -12,7 +12,7 @@ args = parser.parse_args()
 import tensorflow as tf
 import enviroments
 
-env = enviroments.get_pacman_stack_frames_big(human=True)
+env = enviroments.get_pacman_stack_frames_big(human=False)
 
 model = tf.keras.models.load_model(args.model)
 
