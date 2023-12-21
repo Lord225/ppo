@@ -146,7 +146,6 @@ def run():
         tf.summary.scalar('lenght', states.shape[0], step=episode)
 
         t.set_description(f"Reward: {total_rewards:.2f} - Avg: {avg:.2f} - Iterations: {states.shape[0]} size: {len(memory)}")
-
         episode = tf.constant(episode, dtype=tf.int64)
 
         if len(memory) >= params.batch_size and int(episode) % params.train_interval == 0:
@@ -163,7 +162,6 @@ def run():
                 training_step_critic(batch, critic, value_optimizer, episode)
 
             #memory.reset()
-
 
         if episode % params.save_freq == 0 and episode > 0: 
             NAME = f"{config.MODELS_DIR}{params.env_name}{params.version}_{config.RUN_NAME}_{episode}"

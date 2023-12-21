@@ -49,6 +49,21 @@ def pacman_transform_observation_stack_big(observation):
     observation = observation[:85, :, :] # shape (85, 50, 6)
     return observation.astype(np.float32)/255
 
+def pacman_transform_observation_grayscale_stack_big(observation):
+    observation = observation.__array__()
+    # to grayscale (not HSV)
+    observation = [cv2.cvtColor(observation[i], cv2.COLOR_RGB2GRAY) for i in range(observation.shape[0])]
+
+    # reshpae from (2, 210, 160, 3) to (210, 160, 2, 3)
+    observation = np.transpose(observation, (1, 2, 0))
+    # reshape from (210, 160, 2, 3) to (210, 160, 6)
+    observation = np.reshape(observation, (observation.shape[0], observation.shape[1], -1))
+    # resize to target size
+    observation = cv2.resize(observation,  (50, 105), interpolation=cv2.INTER_NEAREST)
+    # cut lower part of the image
+    observation = observation[:85, :, :] # shape (85, 50, 6)
+    return observation.astype(np.float32)/255
+
 
 def pacman_transform_grayscale_observation_stack_big(observation):
     observation = observation.__array__()

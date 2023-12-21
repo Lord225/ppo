@@ -379,6 +379,139 @@ def get_curius_ppo_runner(tf_env_step: Callable[[tf.Tensor], Tuple[tf.Tensor, tf
     return run_episode
 
 
+#@tf.function
+def run_episode_cuorius_selfplay(
+    observation,
+    mask,
+    player1: tf.keras.Model,
+    player2: tf.keras.Model,
+    critic1: tf.keras.Model,
+    critic2: tf.keras.Model,
+    curiosity: tf.keras.Model,
+    tf_env_step: Callable[[tf.Tensor, tf.Tensor], Tuple[tf.Tensor, tf.Tensor, tf.Tensor, tf.Tensor]],
+    max_steps: int,
+    env_actions: int,
+    epsilon: float,
+    curius_coef: float,    
+):
+    # prepare buffers (numpy)
+    states_p1 = tf.TensorArray(dtype=tf.float32, size=0, dynamic_size=True)
+    actions_p1 = tf.TensorArray(dtype=tf.int32, size=0, dynamic_size=True)
+    rewards_p1 = tf.TensorArray(dtype=tf.float32, size=0, dynamic_size=True)
+    values_p1 = tf.TensorArray(dtype=tf.float32, size=0, dynamic_size=True)
+    log_probs_p1 = tf.TensorArray(dtype=tf.float32, size=0, dynamic_size=True)
+
+    states_p2 = tf.TensorArray(dtype=tf.float32, size=0, dynamic_size=True)
+    actions_p2 = tf.TensorArray(dtype=tf.int32, size=0, dynamic_size=True)
+    rewards_p2 = tf.TensorArray(dtype=tf.float32, size=0, dynamic_size=True)
+    values_p2 = tf.TensorArray(dtype=tf.float32, size=0, dynamic_size=True)
+    log_probs_p2 = tf.TensorArray(dtype=tf.float32, size=0, dynamic_size=True)
+
+    curiosities = tf.TensorArray(dtype=tf.float32, size=0, dynamic_size=True)
+
+
+    state = observation
+    next_iteration_is_done = False
+
+    initial_state_shape = state.shape
+    initial_mask_shape = mask.shape
+
+    index_p1 = 0
+    index_p2 = 0
+
+    for t in tf.range(max_steps):
+        # Convert state into a batched tensor (batch size = 1)
+        state = tf.expand_dims(state, 0)
+
+        current_player = t % 2
+        
+        # Run the model and to get action probabilities and critic value
+        if current_player == 0:
+            action_logits_t = player1(state)
+            value_t = critic1(state)
+        else:
+            action_logits_t = player2(state)
+            value_t = critic2(state)
+
+
+        masked_action_logits_t = tf.where(tf.cast(mask, tf.bool), action_logits_t, -1e9)
+        masked_action_random = tf.where(tf.cast(mask, tf.bool), tf.random.uniform([1, env_actions]), -1e9)
+
+        # epsilon greedy
+        action = tf.squeeze(tf.where(
+                tf.random.uniform([1]) < tf.cast(epsilon, tf.float32),
+                # Random action, use mask to make sure it is legal
+                tf.cast(tf.squeeze(tf.random.categorical(masked_action_random, 1), axis=1), tf.int32)[0], # type: ignore
+                # argmax action, use mask to make sure it is legal
+                tf.cast(tf.squeeze(tf.argmax(masked_action_logits_t, axis=1)), tf.int32), # type: ignore
+            ))
+        
+        # action = tf.squeeze(tf.random.categorical(masked_action_logits_t, 1), axis=1) 
+        # action = tf.cast(action, tf.int32)
+        # action = tf.squeeze(action)
+
+        next_state, action_mask, reward, done = tf_env_step(action, next_iteration_is_done) # type: ignore
+        next_state.set_shape(initial_state_shape)
+        action_mask.set_shape(initial_mask_shape)
+
+        action_one_hot = tf.one_hot(action, env_actions)
+        action_input_processed = tf.expand_dims(action_one_hot, axis=0)
+        # calculate curiosity
+        predicted_state = curiosity([state, action_input_processed]) # type: ignore
+        predicted_state = tf.squeeze(predicted_state, axis=0)
+        predicted_state.set_shape(initial_state_shape) # type: ignore
+        curiosity_reward = tf.reduce_sum(tf.square(predicted_state - next_state)) # type: ignore
+
+        reward = reward + curius_coef * curiosity_reward # type: ignore
+
+        curiosities = curiosities.write(t, curiosity_reward)
+
+        log_prob = logprobabilities(action_logits_t, action, env_actions)
+
+        # store results
+        if current_player == 0:
+            states_p1 = states_p1.write(index_p1, tf.squeeze(state))
+            actions_p1 = actions_p1.write(index_p1, action)
+            rewards_p1 = rewards_p1.write(index_p1, reward)
+            values_p1 = values_p1.write(index_p1, tf.squeeze(value_t))
+            log_probs_p1 = log_probs_p1.write(index_p1, tf.squeeze(log_prob))
+            index_p1 += 1
+        else:
+            states_p2 = states_p2.write(index_p2, tf.squeeze(state))
+            actions_p2 = actions_p2.write(index_p2, action)
+            rewards_p2 = rewards_p2.write(index_p2, reward)
+            values_p2 = values_p2.write(index_p2, tf.squeeze(value_t))
+            log_probs_p2 = log_probs_p2.write(index_p2, tf.squeeze(log_prob))
+            index_p2 += 1
+
+        state = next_state
+        mask = action_mask
+
+        if next_iteration_is_done:
+            break
+    
+        if tf.cast(done, tf.bool): # type: ignore
+            next_iteration_is_done = True
+
+    states_p1 = states_p1.stack()
+    actions_p1 = actions_p1.stack()
+    rewards_p1 = rewards_p1.stack()
+    values_p1 = values_p1.stack()
+    log_probs_p1 = log_probs_p1.stack()
+
+    states_p2 = states_p2.stack()
+    actions_p2 = actions_p2.stack()
+    rewards_p2 = rewards_p2.stack()
+    values_p2 = values_p2.stack()
+    log_probs_p2 = log_probs_p2.stack()
+
+    curiosities = curiosities.stack()
+
+    curiosity_mean = tf.reduce_mean(curiosities)
+    curiosity_std = tf.math.reduce_std(curiosities)
+
+    return (states_p1, states_p2, actions_p1, actions_p2, rewards_p1, rewards_p2, values_p1, values_p2, log_probs_p1, log_probs_p2, curiosity_mean, curiosity_std)
+
 
 
 def get_curius_ppo_runner_2(tf_env_step: Callable[[tf.Tensor], Tuple[tf.Tensor, tf.Tensor, tf.Tensor]]):
@@ -414,7 +547,7 @@ def get_curius_ppo_runner_2(tf_env_step: Callable[[tf.Tensor], Tuple[tf.Tensor, 
             action_logits_t = actor(state) # type: ignore
 
             value_t = critic(state) # type: ignore
-
+            
             action = tf.squeeze(tf.random.categorical(action_logits_t, 1), axis=1)
             action = tf.cast(action, tf.int32)
             action = tf.squeeze(action)
