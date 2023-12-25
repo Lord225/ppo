@@ -53,7 +53,7 @@ params.save_freq = 1000
 if args.resume is not None:
     params.resumed = 'resumed from: ' + os.path.basename(args.resume)
 
-splash_screen(params)
+#splash_screen(params)
 
 def get_actor():
     if args.resume is not None:
@@ -72,7 +72,12 @@ def get_actor():
     x = tf.keras.layers.Dense(128, activation=tf.nn.elu)(x)
 
     logits = tf.keras.layers.Dense(params.action_space)(x)
-    return tf.keras.Model(inputs=observation_input, outputs=logits)
+
+    model = tf.keras.Model(inputs=observation_input, outputs=logits)
+
+    model.summary()
+
+    return model
 
 def get_critic():
     if args.resume is not None:
