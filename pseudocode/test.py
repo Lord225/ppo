@@ -1,4 +1,6 @@
-from re import M
+# type: ignore
+# this file contains only garbage code and pseudocode for generating snippets
+
 from typing import Callable, Tuple
 import tensorflow as tf
 
