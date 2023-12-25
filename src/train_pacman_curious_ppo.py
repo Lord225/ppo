@@ -60,7 +60,7 @@ params.save_freq = 1000
 if args.resume is not None:
     params.resumed = 'resumed from: ' + os.path.basename(args.resume)
 
-splash_screen(params)
+#splash_screen(params)
 
 def get_actor():
     if args.resume is not None:
@@ -132,8 +132,11 @@ def get_curiosity():
     x = tf.keras.layers.Conv2D(16, 3, strides=1, activation=tf.nn.elu)(x)
     x = tf.keras.layers.Conv2D(6, 3, strides=1, activation=tf.nn.elu)(x)
 
-    return tf.keras.Model(inputs=[observation_input, action_input], outputs=x)
+    model =  tf.keras.Model(inputs=[observation_input, action_input], outputs=x)
+    
+    model.summary()
 
+    return model
 
 actor = get_actor()
 critic = get_critic()
