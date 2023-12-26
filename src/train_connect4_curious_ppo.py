@@ -37,23 +37,23 @@ params.observation_space = (6, 7, 2)
 params.episodes = 5_000_000
 params.max_steps_per_episode = 100
 
-params.discount_rate = 0.99
+params.discount_rate = 0.995
 params.eps_decay_len = 100
 params.eps_min = 0.1
 
 params.clip_ratio = 0.20
-params.lam = 0.99
-params.curius_coef = 0.0005
+params.lam = 0.995
+params.curius_coef = 0.00015
 
-params.batch_size = 2000
+params.batch_size = 4096
 
-params.train_interval = 10
-params.iters = 20
+params.train_interval = 20
+params.iters = 80
 
-params.save_freq = 2000
+params.save_freq = 500
 params.eval_freq = 1000
 params.copy_player_freq = 1000
-params.update_historic_freq = 5000
+params.update_historic_freq = 1000
 params.train_on_historic_freq = 4
 
 splash_screen(params)
@@ -90,7 +90,12 @@ def tf_env_step(action, action_none):
     return tf.numpy_function(step, [action, action_none], (tf.float32, tf.float32, tf.float32, tf.int32))
 
 # define models
-def get_model():
+def get_model() -> tf.keras.Model:
+    if args.resume is not None:
+        model = tf.keras.models.load_model(args.resume+'.p1.h5')
+        print("loaded model from", args.resume)
+        return model # type: ignore
+
     # observation input
     observation_input = tf.keras.layers.Input(shape=(6, 7, 3), name="observation_input")
 
@@ -99,14 +104,18 @@ def get_model():
     x = tf.keras.layers.Conv2D(64, 3, padding='same', activation="elu")(x)
     x = tf.keras.layers.Conv2D(64, 3, padding='same', activation="elu")(x)
     x = tf.keras.layers.Flatten()(x)
-    x = tf.keras.layers.Dense(512, activation="elu")(x)
     x = tf.keras.layers.Dense(512, activation="elu")(x)
     x = tf.keras.layers.Dense(256, activation="elu")(x)
     output = tf.keras.layers.Dense(7)(x)
 
     return tf.keras.Model(inputs=observation_input, outputs=output)
 
-def get_critic():
+def get_critic()-> tf.keras.Model:
+    if args.resume is not None:
+        model = tf.keras.models.load_model(args.resume+'.critic1.h5')
+        print("loaded model from", args.resume)
+        return model # type: ignore
+
     # observation input
     observation_input = tf.keras.layers.Input(shape=(6, 7, 3), name="observation_input")
 
@@ -115,7 +124,6 @@ def get_critic():
     x = tf.keras.layers.Conv2D(64, 3, padding='same', activation="elu")(x)
     x = tf.keras.layers.Conv2D(64, 3, padding='same', activation="elu")(x)
     x = tf.keras.layers.Flatten()(x)
-    x = tf.keras.layers.Dense(512, activation="elu")(x)
     x = tf.keras.layers.Dense(512, activation="elu")(x)
     x = tf.keras.layers.Dense(256, activation="elu")(x)
     output = tf.keras.layers.Dense(1)(x)
@@ -123,35 +131,25 @@ def get_critic():
     return tf.keras.Model(inputs=observation_input, outputs=output)
 
 
-def get_curiosity():
+def get_curiosity()-> tf.keras.Model:
     if args.resume is not None:
         try:
             model = tf.keras.models.load_model(args.resume+'.curiosity.h5')
             print("loaded model from", args.resume)
-            return model
+            return model # type: ignore
         except:
             print("no curiosity model found, creating new one")
     
     observation_input = tf.keras.layers.Input(shape=(6, 7, 3), name="observation_input")
     action_input = tf.keras.Input(shape=params.action_space, dtype=tf.float32)
-    # convolutional layers
-    x = tf.keras.layers.Conv2D(64, 3, padding='same', activation="elu")(observation_input)
-    x = tf.keras.layers.Conv2D(64, 3, padding='same', activation="elu")(x)
-    x = tf.keras.layers.Conv2D(64, 3, activation="elu")(x)
-    x = tf.keras.layers.Conv2D(32, 3, activation="elu")(x)
-    x = tf.keras.layers.Flatten()(x)
-    # concatenate with action
+    # define simple curiosity model
+    x = tf.keras.layers.Flatten()(observation_input)
     x = tf.keras.layers.Concatenate()([x, action_input])
-    x = tf.keras.layers.Dense(32, activation="elu")(x)
-    x = tf.keras.layers.Dense(32, activation="elu")(x)
-    # reconstruction
-    x = tf.keras.layers.Reshape((1, 1, 32))(x)
-    x = tf.keras.layers.Conv2DTranspose(32, 3, strides=2, padding='same', activation="elu")(x)
-    x = tf.keras.layers.Conv2DTranspose(32, 3, strides=2, padding='same', activation="elu")(x)
-    x = tf.keras.layers.Conv2DTranspose(64, 3, strides=2, padding='same', activation="elu")(x) # input is [8, 8, 3] but shiuld be [6, 7, 3]
-    x = tf.keras.layers.Cropping2D(((2, 0), (1, 0)))(x)
-    x = tf.keras.layers.Conv2D(3, 3, padding='same', activation="elu")(x) 
-     
+    x = tf.keras.layers.Dense(256, activation="elu")(x)
+    x = tf.keras.layers.Dense(256, activation="elu")(x)
+    x = tf.keras.layers.Dense(126, activation="elu")(x)
+    x = tf.keras.layers.Reshape((6, 7, 3))(x)
+
     model = tf.keras.Model(inputs=[observation_input, action_input], outputs=x)
 
     model.summary()
@@ -239,15 +237,25 @@ for i in t:
 
     state, mask = reset_env()
 
-
-    if np.random.uniform() < 0.5:
-        # run with self as p1
-        output = run_episode_cuorius_selfplay(state, mask, player1, player2, critic1, critic2, curiosity, tf_env_step, max_steps_per_episode, action_space, epsilon, curius_coef) # type: ignore
-        P1 = True
-    else: 
-        # run with self as p2
-        output = run_episode_cuorius_selfplay(state, mask, player2, player1, critic1, critic2, curiosity, tf_env_step, max_steps_per_episode, action_space, epsilon, curius_coef) # type: ignore
-        P1 = False
+    if np.random.uniform() < 0.2:
+        # run with historic player
+        if np.random.uniform() < 0.5:
+            # run with historic player as p1
+            output = run_episode_cuorius_selfplay(state, mask, historic_player, player2, critic1, critic2, curiosity, tf_env_step, max_steps_per_episode, action_space, epsilon, curius_coef)  # type: ignore
+            P1 = True
+        else:
+            # run with historic player as p2
+            output = run_episode_cuorius_selfplay(state, mask, player2, historic_player, critic1, critic2, curiosity, tf_env_step, max_steps_per_episode, action_space, epsilon, curius_coef)  # type: ignore
+            P1 = False
+    else:
+        if np.random.uniform() < 0.5:
+            # run with self as p1
+            output = run_episode_cuorius_selfplay(state, mask, player1, player2, critic1, critic2, curiosity, tf_env_step, max_steps_per_episode, action_space, epsilon, curius_coef) # type: ignore
+            P1 = True
+        else: 
+            # run with self as p2
+            output = run_episode_cuorius_selfplay(state, mask, player2, player1, critic1, critic2, curiosity, tf_env_step, max_steps_per_episode, action_space, epsilon, curius_coef) # type: ignore
+            P1 = False
     
     (states_p1, states_p2, actions_p1, actions_p2, rewards_p1, rewards_p2, values_p1, values_p2, log_probs_p1, log_probs_p2,  curiosity_mean, curiosity_std) = output # type: ignore
 
@@ -304,13 +312,14 @@ for i in t:
     if len(memoryp1) > batch_size and len(memoryp2) > batch_size and i % params.train_interval == 0:
         stats = []
 
+        batch1 = memoryp1.sample(batch_size)
+        batch2 = memoryp2.sample(batch_size)
+
         for j in range(params.iters):
-            batch1 = memoryp1.sample(batch_size)
-            #batch2 = memoryp1.sample(batch_size)
 
             history = training_step_ppo_selfplay_p1(
                 batch1,
-               # batch2,
+                batch2,
                 player1,
                 action_space,
                 clip_ratio,
@@ -318,13 +327,10 @@ for i in t:
                 episode,
             ) # type: ignore
             stats.append(history)
-            
-            batch1 = memoryp2.sample(batch_size)
-            #batch2 = memoryp2.sample(batch_size)
 
             history = training_step_ppo_selfplay_p2(
                 batch1,
-              #  batch2,
+                batch2,
                 player2,
                 action_space,
                 clip_ratio,
@@ -336,24 +342,26 @@ for i in t:
         log_stats(stats, episode)
 
         stats = []
-
+        
+        batch1 = memoryp1.sample_critic(batch_size)
+        batch2 = memoryp2.sample_critic(batch_size)
         for j in range(params.iters):
             # batch1 = memoryp1.sample_critic(batch_size)
             # batch2 = memoryp2.sample_critic(batch_size)
             # training_step_critic_selfplay(batch1, batch2, critic, optimizer_critic, episode)
 
-            batch1 = memoryp1.sample_critic(batch_size)
-            h = training_step_critic1(batch1, critic1, optimizer_critic1, episode)
+
+            h = training_step_critic1(batch1,batch2, critic1, optimizer_critic1, episode)
             stats.append(h)
-            batch2 = memoryp2.sample_critic(batch_size)
-            h = training_step_critic2(batch2, critic2, optimizer_critic2, episode)
+            h = training_step_critic2(batch1,batch2, critic2, optimizer_critic2, episode)
             stats.append(h)
             
         tf.summary.scalar('critic_loss', np.mean(stats), step=i)
         
+        batch1 = memoryp1.sample_curiosity(batch_size)
+        batch2 = memoryp2.sample_curiosity(batch_size)
+    
         for j in range(params.iters):
-            batch1 = memoryp1.sample_curiosity(batch_size)
-            batch2 = memoryp2.sample_curiosity(batch_size)
             training_step_selfplay_curiosty(batch1, batch2, curiosity, optimizer_curiosity, action_space, episode)
 
         # clear memory after training
@@ -387,4 +395,7 @@ for i in t:
         NAME = f"{config.MODELS_DIR}{params.env_name}{params.version}_{config.RUN_NAME}_{episode}"
 
         player1.save(f"{NAME}.p1.h5") # type: ignore
-        player2.save(f"{NAME}.critic.h5")
+        critic1.save(f"{NAME}.critic1.h5") # type: ignore
+        # save curiosity
+        curiosity.save(f"{NAME}.curiosity.h5") # type: ignore
+        
