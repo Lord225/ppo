@@ -1,6 +1,6 @@
 # PPO with curiosity learning
 
-This repository contains rought and low level implementaion of PPO with curiosity learning. This repo is code for paper I wrote recently ![Analiza algorytmów uczenia przez wzmacnianie z zaimplementowanym algorytmem PPO (Proximal Policy Optimization)](https://cris.pk.edu.pl/info/article/CUTb91a6b74ee7b4b5bae4c4367cfdb0489/). The study focuses on comparing various methods and techniques for training agents in diverse environments, encompassing the need for temporal information, exploration through curiosity and interactions between multiple agents in self-play
+This repository contains rought and low level implementaion of PPO with curiosity learning. This repo is code for paper I wrote recently ![Analiza algorytmów uczenia przez wzmacnianie z zaimplementowanym algorytmem PPO (Proximal Policy Optimization)](https://cris.pk.edu.pl/info/article/CUTb91a6b74ee7b4b5bae4c4367cfdb0489/). The study focuses on comparing various methods and techniques for training agents in diverse environments, encompassing the need for temporal information, exploration through curiosity and interactions between multiple agents in self-play
 
 ## MsPacman model sample
 
