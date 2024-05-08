@@ -29,6 +29,6 @@ Optimalization objective is sum of reward and curiosity rewards.
 
 
 ## V5 model in action
-[Model v5](animations/MsPacman-v5v5.0_20231203-143539_5000-ghost-abusement.gif)
+![Model v5](animations/MsPacman-v5v5.0_20231203-143539_5000-ghost-abusement.gif)
 
 
