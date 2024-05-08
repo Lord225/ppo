@@ -26,3 +26,9 @@ Curiosity coef were changing during training.
 ## Opt Objective (Reward + Curiosity Reward)
 Optimalization objective is sum of reward and curiosity rewards. 
 ![opt objective](plots/v5_opt_objective.png)
+
+
+## V5 model in action
+[Model v5](animations/MsPacman-v5v5.0_20231203-143539_5000-ghost-abusement.gif)
+
+
