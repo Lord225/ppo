@@ -12,7 +12,7 @@ It is easly able to achive score `>3000` in pacman. In comparsion with DQN I was
 
 To reproduce effects run appropriate train script (`src/train_*.pl`). Hyperparameters were changed during training. For exac values, plese refer to linked paper.   
 
-RL requires a lot of tuning even tho PPO is quite robust on its own. PPO has tendency to settle in local minimas and have hard time finding new strateges without addinational techniques (it has online policy, so it uses same sampling function for running and training). Curiosity encourages agents to explore more and to take paths that are considered suboptimal by policy, but might result in better overall performance. With that in place ppo is able to quicly learn complex enviroments. 
+RL requires a lot of tuning even tho PPO is quite robust on its own. PPO has tendency to settle in local minimas and have hard time finding new strateges without addinational techniques (it is on-policy algorithm, so it uses same sampling function for running and training). Curiosity encourages agents to explore more and to take paths that are considered suboptimal by policy, but might result in better overall performance. With that in place ppo is able to quicly learn complex enviroments. 
 
 This implementaion uses `@tf.function` whenever possible so it also runs quite fast. 
 ## Critic loss and Avg Score
