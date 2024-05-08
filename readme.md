@@ -16,6 +16,7 @@ RL requires a lot of tuning even tho PPO is quite robust on its own. PPO has ten
 
 This implementaion uses `@tf.function` whenever possible so it also runs quite fast. 
 ## Critic loss and Avg Score
+Loss of the critic in PPO model is shown on plot below. Algorithm pritty quicly gets big rewards and critic had hard time predicting them, after awhile it settled down and ciritic learn how actor and env behaves and was able to estimate rewards 
 ![Critic loss & avg score (pacman)](plots/v5_reward_critic_loss.png)
 
 ## Curiosity rewards
@@ -23,4 +24,5 @@ Curiosity coef were changing during training.
 ![curiosity sum](plots/v5_curiosity_sum.png)
 
 ## Opt Objective (Reward + Curiosity Reward)
+Optimalization objective is sum of reward and curiosity rewards. 
 ![opt objective](plots/v5_opt_objective.png)
