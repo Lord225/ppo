@@ -6,13 +6,13 @@ This repository contains rought and low level implementaion of PPO with curiosit
 
 ![Sample animation](animations/MsPacman-v5v6.1_20231214-094337_3000-tryhard.gif)
 
-It is easly able to achive score `>3000` in pacman. In comparsion with DQN I was able to achive at most 700 points on avg. In some experiments I had to cap amount of points given to agent for capturing ghosts becouse actor focues too much on capcures instead of exploring map (Capture reward decreses from 1000 to 100). It made actor act a bit more like human would.
+It is easly able to achive score `>3000` in pacman. In comparsion with DQN I was able to achive at most 700 points on avg. In some experiments In some experiments I had to cap the amount of points given to agent for capturing ghosts becouse actor focues too much on capcures instead of exploring map (Capture reward decresed from 1000 to 100). It made actors behavior a bit more natural. 
 
 ![Avg score Pacman](plots/all_models.png)
 
-To reproduce effects run appropriate train script (`src/train_*.pl`). Hyperparameters were changed during training. For exac values, plese refer to linked paper.   
+To reproduce effects run appropriate train script (`src/train_*.pl`). Hyperparameters were changed during training. For exac values, for exac reproduction please refer to linked paper. I can public log files too with exac trace of used parameters for each run.
 
-RL requires a lot of tuning even tho PPO is quite robust on its own. PPO has tendency to settle in local minimas and have hard time finding new strateges without addinational techniques (it is on-policy algorithm, so it uses same sampling function for running and training). Curiosity encourages agents to explore more and to take paths that are considered suboptimal by policy, but might result in better overall performance. With that in place ppo is able to quicly learn complex enviroments. 
+RL requires a lot of tuning even tho PPO is quite robust on its own. PPO has tendency to settle in local minimas and have hard time finding new strateges without addinational techniques (it is on-policy algorithm, so it uses same sampling function for running and training). Curiosity encourages agents to explore more and to take paths that are considered suboptimal by policy, but might result in better overall performance. With that in place ppo is able to quicly learn complex enviroments. Implementaion of curiosity is based on paper `Large-Scale Study of Curiosity-Driven Learning`
 
 This implementaion uses `@tf.function` whenever possible so it also runs quite fast. 
 ## Critic loss and Avg Score
