@@ -1,3 +1,9 @@
 /logs
 /models
 __pycache__
+
+# Generated artifacts are stored outside Git; previous copies are in the cleanup backup.
+/logs.zip
+/retain/*.h5
+/logs.zip
+/**/__pycache__/*
